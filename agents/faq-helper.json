@@ -1,0 +1,16 @@
+{
+  "name": "faq-helper",
+  "version": 1,
+  "description": "The minimal agent — one topic, knowledge only, everything else inherited.",
+  "default_topic": "faq",
+  "topics": [
+    {
+      "name": "faq",
+      "mode": "chat",
+      "system_prompt": "You are a concise FAQ assistant. Answer only from the provided context; if it isn't there, say you don't know.",
+      "skills": []
+    }
+  ],
+  "knowledge": ["faq-hours", "faq-refunds"],
+  "governance": { "data_scope": "public", "max_turns_per_session": 50 }
+}

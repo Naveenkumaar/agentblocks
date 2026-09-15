@@ -1,0 +1,33 @@
+{
+  "name": "trip-planner",
+  "version": 1,
+  "description": "Multi-tool travel concierge — a weather tool over a connector plus RAG over travel docs.",
+  "default_topic": "plan",
+  "topics": [
+    {
+      "name": "plan",
+      "mode": "chat",
+      "system_prompt": "You are a helpful travel concierge. Use the weather tool and knowledge to plan trips clearly and safely.",
+      "skills": ["weather-lookup"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "weather-lookup",
+      "kind": "hydrator",
+      "connector": "weather",
+      "description": "Fetch the forecast for a destination."
+    }
+  ],
+  "connectors": [
+    {
+      "name": "weather",
+      "kind": "static",
+      "config": {
+        "data": { "forecast": "Clear skies, 24C, light breeze." }
+      }
+    }
+  ],
+  "knowledge": ["travel-visa", "travel-weather"],
+  "governance": { "data_scope": "public" }
+}

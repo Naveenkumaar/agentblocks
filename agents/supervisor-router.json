@@ -1,0 +1,32 @@
+{
+  "name": "supervisor-router",
+  "version": 1,
+  "description": "Supervisor — routes across specialists discovered from the registry (no hardcoded membership).",
+  "default_topic": "route",
+  "topics": [
+    {
+      "name": "route",
+      "mode": "chat",
+      "system_prompt": "You are a supervisor. Given the user's need and the discovered specialists, choose which specialist should handle it and explain why in one sentence.",
+      "skills": ["discover-specialists"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "discover-specialists",
+      "kind": "hydrator",
+      "connector": "registry",
+      "description": "List the specialist agents currently available."
+    }
+  ],
+  "connectors": [
+    {
+      "name": "registry",
+      "kind": "static",
+      "config": {
+        "data": { "specialists": ["faq-helper", "trip-planner"] }
+      }
+    }
+  ],
+  "governance": { "data_scope": "public" }
+}

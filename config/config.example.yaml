@@ -1,0 +1,15 @@
+# Copy to config/config.yaml and adjust. All values also read from env vars.
+
+# Model backend: "stub" (offline, default) or "ollama" (local).
+model_backend: stub
+
+# Only used when model_backend = ollama
+ollama:
+  model: llama3.2
+  host: http://localhost:11434
+
+# Where seeded agent definitions live
+agents_dir: agents
+
+# Eval gate: fraction of cases that must pass before a version can activate
+eval_pass_threshold: 1.0

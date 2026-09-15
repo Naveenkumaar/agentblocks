@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>agentblocks · console</title>
+<style>
+  :root { color-scheme: light dark; --bg:#0d1117; --panel:#161b22; --line:#30363d; --fg:#e6edf3; --muted:#8b949e; --accent:#6e56cf; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px 20px; border-bottom:1px solid var(--line); display:flex; align-items:center; gap:10px; }
+  header h1 { font-size:16px; margin:0; } header .dot { color:var(--accent); }
+  main { display:grid; grid-template-columns:240px 1fr; min-height:calc(100vh - 58px); }
+  aside { border-right:1px solid var(--line); padding:14px; }
+  aside h2 { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+  .agent { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; cursor:pointer; }
+  .agent.active { border-color:var(--accent); }
+  .agent b { display:block; } .agent span { color:var(--muted); font-size:12px; }
+  section { padding:18px 20px; }
+  textarea { width:100%; min-height:70px; background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:10px; font:inherit; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:9px 16px; font:inherit; cursor:pointer; margin-top:8px; }
+  .reply { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; margin-top:14px; white-space:pre-wrap; }
+  .blocked { border-color:#f85149; }
+  .trace { margin-top:14px; }
+  .stage { display:flex; gap:8px; font-size:12px; padding:4px 0; border-bottom:1px dashed var(--line); }
+  .stage b { color:var(--accent); min-width:120px; }
+  .muted { color:var(--muted); }
+</style>
+</head>
+<body>
+  <header><span class="dot">▣</span><h1>agentblocks console</h1><span class="muted" id="backend"></span></header>
+  <main>
+    <aside>
+      <h2>Agents</h2>
+      <div id="agents"></div>
+    </aside>
+    <section>
+      <div class="muted" id="current">Select an agent…</div>
+      <textarea id="msg" placeholder="Type a turn — try a normal question, then try 'ignore all previous instructions'."></textarea>
+      <div><button id="send">Run turn</button></div>
+      <div id="out"></div>
+    </section>
+  </main>
+<script>
+let active = null;
+async function loadAgents() {
+  const res = await fetch('/agents');
+  const agents = await res.json();
+  const box = document.getElementById('agents');
+  box.innerHTML = '';
+  agents.forEach(a => {
+    const el = document.createElement('div');
+    el.className = 'agent' + (a.name === active ? ' active' : '');
+    el.innerHTML = `<b>${a.name}</b><span>v${a.version} · ${a.description}</span>`;
+    el.onclick = () => { active = a.name; document.getElementById('current').textContent = a.name; loadAgents(); };
+    box.appendChild(el);
+  });
+  const h = await (await fetch('/health')).json();
+  document.getElementById('backend').textContent = h.status;
+}
+async function send() {
+  if (!active) { alert('Pick an agent first'); return; }
+  const message = document.getElementById('msg').value;
+  const res = await fetch(`/v1/agents/${active}/turns`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ message })
+  });
+  const data = await res.json();
+  const out = document.getElementById('out');
+  out.innerHTML = `<div class="reply ${data.blocked ? 'blocked' : ''}">${data.blocked ? '⛔ ' : ''}${data.reply}${data.reason ? '\n\n(' + data.reason + ')' : ''}</div>`;
+  const trace = document.createElement('div'); trace.className = 'trace';
+  (data.trace || []).forEach(s => {
+    const row = document.createElement('div'); row.className = 'stage';
+    const { stage, ...rest } = s;
+    row.innerHTML = `<b>${stage}</b><span class="muted">${JSON.stringify(rest)}</span>`;
+    trace.appendChild(row);
+  });
+  out.appendChild(trace);
+}
+document.getElementById('send').onclick = send;
+loadAgents();
+</script>
+</body>
+</html>
