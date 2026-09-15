@@ -1,6 +1,6 @@
 """Governance checks run before a turn is admitted.
 
-Audit-first: these gate execution (kill switch, per-session quota) and raise
+These checks gate execution (kill switch, per-session quota) and raise
 :class:`GovernanceError` when a turn must be refused.
 """
 from __future__ import annotations

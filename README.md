@@ -28,7 +28,7 @@ agent lives in code.
 ## Table of contents
 
 - [Why](#why)
-- [The one-sentence security model](#the-one-sentence-security-model)
+- [Security posture](#security-posture)
 - [Quick start](#quick-start)
 - [How a turn flows](#how-a-turn-flows)
 - [The agent-definition model](#the-agent-definition-model)
@@ -49,16 +49,13 @@ between a demo and a platform.
 
 ---
 
-## The one-sentence security model
+## Security posture
 
-> **The prompt is not the boundary — the connector is.**
-
-Guardrails redact PII and refuse prompt-injection at the edge, but the real
-enforcement is below the model: under `data_scope: caller_tenant` the
-[connector layer](app/connectors/base.py) injects the caller's resolved scope
-into every outbound parameter map *last*, so a prompt-injected "show me other
-tenants" cannot widen its own scope. The [adversarial suite](evals/adversarial.yaml)
-gates activation on exactly this.
+Guardrails redact synthetic PII and refuse obvious prompt-injection at the edge,
+but the enforcement that matters happens below the model: a
+[connector](app/connectors/base.py) merges the caller's resolved scope into
+every outbound call, so an injected request cannot widen its own access. The
+[adversarial suite](evals/adversarial.yaml) gates activation on exactly this.
 
 ---
 
@@ -175,9 +172,9 @@ tests/          pytest (engine + guardrails)
 
 - [ ] Persist versions in Postgres; embeddings in **pgvector**
 - [ ] Real **MCP** tool server behind the `mcp` connector
-- [ ] `effector` skills with maker-checker (four-eyes) approval
-- [ ] Mission mode (waits, checkpoints, resumable)
-- [ ] Streaming turns + per-stage latency lenses in the console
+- [ ] `effector` skills with an approval step for high-risk actions
+- [ ] Long-running task mode (waits, checkpoints, resumable)
+- [ ] Streaming turns + a per-stage latency view in the console
 
 ---
 

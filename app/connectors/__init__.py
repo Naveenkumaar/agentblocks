@@ -1,9 +1,9 @@
-"""Connectors — the real trust boundary.
+"""Connectors — where outbound access is scoped and enforced.
 
-The one-sentence security model: **the prompt is not the boundary, the connector
-is.** Under ``data_scope: caller_tenant`` the connector layer injects the
-caller's resolved scope into every outbound call *below the model*, so a
-prompt-injected "show me other tenants" physically cannot escape.
+Enforcement lives below the model, not in the prompt: under
+``data_scope: caller_tenant`` the connector layer merges the caller's resolved
+scope into every outbound call, so an injected "show me other tenants" cannot
+widen its own access.
 """
 from .base import Connector, ConnectorResult
 from .http_connector import HttpConnector

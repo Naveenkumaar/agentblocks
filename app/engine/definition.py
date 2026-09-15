@@ -24,7 +24,7 @@ class Skill(BaseModel):
     """A capability the agent can use.
 
     ``hydrator`` skills read (safe, read-only); ``effector`` skills act and can
-    carry a ``risk_tier`` that triggers maker-checker approval downstream.
+    carry a ``risk_tier`` that can require an approval step downstream.
     """
 
     name: str
