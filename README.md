@@ -37,6 +37,10 @@ agent lives in code.
 - [Repository map](#repository-map)
 - [Roadmap](#roadmap)
 
+> **Full design write-up:** [ARCHITECTURE.md](ARCHITECTURE.md) — the two planes, the
+> eight-stage turn pipeline, the connector trust boundary, and the design decisions
+> behind each, all mapped to the code.
+
 ---
 
 ## Why
@@ -131,7 +135,7 @@ Versions are **immutable**; a version activates only through the eval gate.
 | Agent | What it demonstrates |
 |-------|----------------------|
 | [`faq-helper`](agents/faq-helper.json) | the minimal agent — one topic, knowledge only, everything else inherited |
-| [`trip-planner`](agents/trip-planner.json) | multi-tool — a weather tool over a connector + RAG over travel docs |
+| [`trip-planner`](agents/trip-planner.json) | multi-tool — a **live weather tool** (Open-Meteo, no API key) over a connector + RAG over travel docs |
 | [`supervisor-router`](agents/supervisor-router.json) | supervisor that routes across specialists discovered from the registry |
 
 ---
@@ -155,7 +159,7 @@ and a CI check (`python evals/run_eval.py`).
 app/
   engine/       definition (the block model) · registry (+ activation gate) · runtime (turn pipeline) · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
-  connectors/   base (scope boundary) · http · mcp (stub) · static
+  connectors/   base (scope boundary) · http · mcp (stub) · static · weather (live Open-Meteo)
   knowledge/    dependency-free keyword retriever (swap for a vector store)
   memory/       bounded session store
   governance/   kill switch · quotas
@@ -163,13 +167,15 @@ app/
   main.py       FastAPI: control plane + runtime plane + console
 agents/         the 3 seeded JSON definitions
 evals/          golden + adversarial suites + gate runner
-tests/          pytest (engine + guardrails)
+tests/          pytest (engine + guardrails + weather connector)
+ARCHITECTURE.md the full design write-up, mapped to the code
 ```
 
 ---
 
 ## Roadmap
 
+- [x] A real, key-free external tool wired end to end (`weather` → Open-Meteo)
 - [ ] Persist versions in Postgres; embeddings in **pgvector**
 - [ ] Real **MCP** tool server behind the `mcp` connector
 - [ ] `effector` skills with an approval step for high-risk actions

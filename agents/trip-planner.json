@@ -22,10 +22,8 @@
   "connectors": [
     {
       "name": "weather",
-      "kind": "static",
-      "config": {
-        "data": { "forecast": "Clear skies, 24C, light breeze." }
-      }
+      "kind": "weather",
+      "config": { "default_city": "London" }
     }
   ],
   "knowledge": ["travel-visa", "travel-weather"],

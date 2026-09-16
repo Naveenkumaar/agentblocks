@@ -9,6 +9,7 @@ from .base import Connector, ConnectorResult
 from .http_connector import HttpConnector
 from .mcp_connector import McpConnector
 from .static_connector import StaticConnector
+from .weather_connector import OpenMeteoConnector
 
 __all__ = [
     "Connector",
@@ -16,6 +17,7 @@ __all__ = [
     "HttpConnector",
     "McpConnector",
     "StaticConnector",
+    "OpenMeteoConnector",
     "build_connector",
 ]
 
@@ -26,6 +28,7 @@ def build_connector(spec):
         "http": HttpConnector,
         "mcp": McpConnector,
         "static": StaticConnector,
+        "weather": OpenMeteoConnector,
     }
     cls = mapping.get(spec.kind, StaticConnector)
     return cls(spec.name, spec.config)
