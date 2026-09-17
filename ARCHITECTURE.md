@@ -11,6 +11,9 @@ you can open. If you change the code, change this doc in the same commit.
 - [The connector is the trust boundary](#the-connector-is-the-trust-boundary)
 - [The eval gate](#the-eval-gate)
 - [Design decisions](#design-decisions)
+- [Code-level flow](#code-level-flow)
+- [Problems faced & how I fixed them](#problems-faced--how-i-fixed-them)
+- [What this is capable of](#what-this-is-capable-of)
 - [Extending it](#extending-it)
 
 ---
@@ -168,6 +171,99 @@ The choices that shape everything above, and the reasoning behind each:
    deterministic stub and the connectors degrade gracefully, so the whole system
    runs with no keys and no network — then you opt into a real model (Ollama) or
    a real tool (Open-Meteo) without touching the engine.
+
+---
+
+## Code-level flow
+
+Follow one `POST /v1/agents/{name}/turns` request through the code, function by
+function. Every step names the file so you can open it and read along.
+
+```
+app/main.py : run_turn()                      ← HTTP entry
+  │  registry.get(name)                        app/engine/registry.py
+  │      → returns the active AgentDefinition   app/engine/definition.py
+  ▼
+app/engine/runtime.py : Engine.run_turn(agent, message, ...)
+  │
+  ├─ 1 ingress   step("ingress", ...)          → append to trace
+  │
+  ├─ 2 govern    enforce(agent.governance, memory.turn_count(session))
+  │              app/governance/checks.py       → raises GovernanceError → early return
+  │
+  ├─ 3 guardrails-in
+  │      detect_injection(message)             app/guardrails/injection.py
+  │          → (True, signal) ⇒ block + return
+  │      redact_pii(message)                    app/guardrails/redact.py
+  │          → (safe_message, vault)            vault = {token: original}
+  │
+  ├─ 4 route     agent.topic(topic_name)       app/engine/definition.py
+  │          → the Topic (system_prompt + allowed skill names)
+  │
+  ├─ 5 assemble  self._run_hydrators(agent, topic, safe_message, scope, step)
+  │      └─ for each hydrator skill on the topic:
+  │             spec = agent.connector(skill.connector)      definition.py
+  │             connector = build_connector(spec)            app/connectors/__init__.py
+  │             res = connector.invoke({"query": ...}, scope)  ← THE TRUST BOUNDARY
+  │                   app/connectors/base.py : Connector.invoke()
+  │                     scoped = {**params, **scope}   # scope injected LAST
+  │                     try: return _call(scoped)       # subclass does real I/O
+  │                     except: return ok=False         # never crashes the turn
+  │      context = history + knowledge(RAG) + tool results
+  │
+  ├─ 6 reason-act  self.model.generate(system_prompt, safe_message, context)
+  │                app/engine/model_gateway.py  (StubModel offline | OllamaModel real)
+  │
+  ├─ 7 guardrails-out
+  │      if vault and audience allowed: restore(reply, vault)   redact.py
+  │          → detokenize PII only for an authorized audience
+  │
+  └─ 8 egress    memory.append(session, ...)   app/memory/store.py
+                 return TurnResult(reply, blocked, reason, trace)
+```
+
+And the **activation path** (control plane), which is separate:
+
+```
+app/main.py : activate(name, version)
+  → registry.activate(name, version, gate)      app/engine/registry.py
+       result = gate(definition)                 evals/run_eval.py : evaluate()
+           runs golden.yaml + adversarial.yaml through Engine.run_turn
+       if not result["passed"]: raise PermissionError   ← version stays inactive
+       else: self._active[name] = version
+```
+
+The two paths never touch each other's state: `run_turn` only reads a definition,
+`activate` only writes the active-version pointer after the gate passes.
+
+---
+
+## Problems faced & how I fixed them
+
+The decisions above came from concrete problems. This is the record of them —
+the "why it looks like this."
+
+| Problem | Symptom | Fix (in the code) |
+|--------|---------|-------------------|
+| **Prompt injection reaching tools** | A crafted message ("act as another tenant") could make the model call a connector outside its scope. | Enforcement moved *below the model*: `Connector.invoke` merges the caller's `scope` **last** (`{**params, **scope}`), so params can't override it — the prompt can't widen access. Gated by the adversarial eval suite. |
+| **A flaky external tool crashed the whole turn** | One failing HTTP call raised and killed the request. | `Connector.invoke` wraps `_call` in try/except and returns `ok=False`; stage 5 still assembles context and the turn completes with a graceful answer. |
+| **"Which version is live?" was ambiguous** | Editing an agent silently changed behaviour under running traffic. | Versions are **immutable** once created; going live requires `registry.activate`, and the active pointer only moves after the eval gate passes. |
+| **Bad versions could ship** | Nothing tied correctness to release. | `activate()` runs `golden.yaml` (must answer) + `adversarial.yaml` (must refuse) and **refuses activation** below threshold — correctness is a property of release. |
+| **Couldn't explain an answer after the fact** | No record of why a reply happened. | Every stage appends to a `trace`; a turn is reconstructable end to end from `ingress` to `egress` (visible in the console). |
+| **Needed to demo without keys/network** | Onboarding required an API key just to see it run. | Model + connectors default to offline stubs (`StubModel`, graceful connector failure); real backends (Ollama, Open-Meteo) are opt-in via env var — no engine change. |
+| **PII leaking to logs/model** | Raw user data flowed into the model and traces. | `redact_pii` tokenizes on the way in; `restore` detokenizes only for an allowed audience on the way out — the model and traces see tokens. |
+
+---
+
+## What this is capable of
+
+- **Define an agent as data** — ship a new agent by writing a JSON definition and an eval case; zero engine code.
+- **Multi-tool turns** — a topic's hydrator skills call any mix of `http` / `mcp` / `static` / `weather` connectors, each governed by the same scope boundary.
+- **Live external tools** — the `weather` connector calls Open-Meteo (real geocoding + forecast, no API key) as a worked example.
+- **Grounded, guarded responses** — RAG context + PII tokenization + prompt-injection refusal on every turn.
+- **Release safety** — immutable versions, eval-gated activation, kill switch, and per-session quotas.
+- **Full explainability** — a per-stage trace for every turn, surfaced in a self-contained operator console (Configure / Simulate / Chat).
+- **Runs anywhere** — offline by default (no keys, no network); opt into a local model and live tools without touching the pipeline.
 
 ---
 
