@@ -126,6 +126,82 @@ class Engine:
         return TurnResult(reply=out, trace=trace)
 
     # ------------------------------------------------------------------
+    def run_turn_stream(self, agent: AgentDefinition, message: str, session_id: str = "default",
+                        topic_name: str | None = None, audience: str = "user",
+                        scope: dict[str, Any] | None = None):
+        """Same pipeline as :meth:`run_turn`, but yields events as they happen:
+        ``{"type": "token", "text": ...}`` during reason-act, then a final
+        ``{"type": "done", "reply", "trace", ...}``. Early exits (govern/injection/
+        no-topic) yield only a ``done`` event.
+        """
+        trace: list[dict[str, Any]] = []
+        last = [time.perf_counter()]
+
+        def step(stage: str, **detail: Any) -> None:
+            now = time.perf_counter()
+            trace.append({"stage": stage, "ms": round((now - last[0]) * 1000, 2), **detail})
+            last[0] = now
+
+        def done(reply: str, **kw: Any) -> dict[str, Any]:
+            return {"type": "done", "reply": reply, "trace": trace, **kw}
+
+        step("ingress", chars=len(message), session=session_id)
+        try:
+            enforce(agent.governance, self.memory.turn_count(session_id))
+        except GovernanceError as exc:
+            step("govern", refused=str(exc))
+            yield done("Sorry, I can't take that turn right now.", blocked=True, reason=str(exc))
+            return
+        step("govern", ok=True)
+
+        is_injection, signal = detect_injection(message)
+        if is_injection and agent.guardrails.block_injection:
+            step("guardrails-in", blocked_injection=signal)
+            yield done("That request can't be processed.", blocked=True, reason=f"injection:{signal}")
+            return
+        safe_message, vault = (redact_pii(message) if agent.guardrails.redact_pii else (message, {}))
+        step("guardrails-in", pii_tokens=len(vault), injection=is_injection)
+
+        topic = agent.topic(topic_name)
+        if topic is None:
+            step("route", error="no topic")
+            yield done("No topic is configured for this agent.", blocked=True, reason="no-topic")
+            return
+        step("route", topic=topic.name, mode=topic.mode)
+
+        history = self.memory.context(session_id)
+        knowledge = self.retriever.retrieve(safe_message, agent.knowledge) if agent.knowledge else []
+        tool_data = self._run_hydrators(agent, topic, safe_message, scope, step)
+        context = "\n".join(filter(None, [history, "\n".join(knowledge), _fmt_tools(tool_data)]))
+        step("assemble", history_turns=self.memory.turn_count(session_id),
+             knowledge=len(knowledge), tools=len(tool_data))
+
+        chunks: list[str] = []
+        for tok in self.model.generate_stream(topic.system_prompt, safe_message, context):
+            chunks.append(tok)
+            yield {"type": "token", "text": tok}
+        reply_text = "".join(chunks)
+        step("reason-act", backend=getattr(self.model, "backend", "?"), chars=len(reply_text))
+
+        appr = self._run_effectors(agent, topic, safe_message, audience, step)
+        if appr is not None:
+            self.memory.append(session_id, "user", message)
+            yield done(f"The action '{appr.skill}' needs a second approver before it runs. "
+                       f"Created approval {appr.id}.", suspended=True, approval_id=appr.id)
+            return
+
+        out = reply_text
+        if vault and audience in agent.guardrails.allowed_audiences:
+            out = restore(out, vault)
+            step("guardrails-out", audience=audience, revealed=True)
+        else:
+            step("guardrails-out", audience=audience, revealed=False)
+        self.memory.append(session_id, "user", message)
+        self.memory.append(session_id, "assistant", out)
+        step("egress", chars=len(out))
+        yield done(out)
+
+    # ------------------------------------------------------------------
     def _run_hydrators(self, agent, topic, message, scope, step) -> dict[str, Any]:
         results: dict[str, Any] = {}
         for skill_name in topic.skills:

@@ -61,13 +61,32 @@ async function loadAgents() {
 async function send() {
   if (!active) { alert('Pick an agent first'); return; }
   const message = document.getElementById('msg').value;
-  const res = await fetch(`/v1/agents/${active}/turns`, {
+  const out = document.getElementById('out');
+  // stream the reply token-by-token via SSE
+  out.innerHTML = `<div class="reply" id="streamReply"></div>`;
+  const replyEl = document.getElementById('streamReply');
+  const res = await fetch(`/v1/agents/${active}/turns/stream`, {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({ message })
   });
-  const data = await res.json();
-  const out = document.getElementById('out');
-  out.innerHTML = `<div class="reply ${data.blocked ? 'blocked' : ''}">${data.blocked ? '⛔ ' : ''}${data.reply}${data.reason ? '\n\n(' + data.reason + ')' : ''}</div>`;
+  const reader = res.body.getReader(); const dec = new TextDecoder();
+  let buf = '', data = { trace: [] };
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n\n')) >= 0) {
+      const line = buf.slice(0, i).replace(/^data: /, ''); buf = buf.slice(i + 2);
+      if (!line) continue;
+      const ev = JSON.parse(line);
+      if (ev.type === 'token') { replyEl.textContent += ev.text; }
+      else if (ev.type === 'done') {
+        data = ev;
+        replyEl.className = 'reply' + (ev.blocked ? ' blocked' : '');
+        replyEl.textContent = (ev.blocked ? '⛔ ' : '') + ev.reply + (ev.reason ? '\n\n(' + ev.reason + ')' : '');
+      }
+    }
+  }
   const trace = document.createElement('div'); trace.className = 'trace';
   const total = (data.trace || []).reduce((a, s) => a + (s.ms || 0), 0);
   (data.trace || []).forEach(s => {

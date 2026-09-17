@@ -266,6 +266,7 @@ the "why it looks like this."
 - **Release safety** — immutable versions, eval-gated activation, kill switch, and per-session quotas.
 - **Maker-checker on risky actions** — an `effector` skill at/above the agent's `approval_required_tier` doesn't execute; it suspends the turn and records a pending approval that a *different* person must approve (`checker != maker`) before it runs (`app/governance/approvals.py`, `POST /approvals/{id}/decide`).
 - **Full explainability + timing** — a per-stage trace for every turn, each stage stamped with its latency (`ms`) and a running total, surfaced in a self-contained operator console (Configure / Simulate / Chat).
+- **Streaming turns** — `run_turn_stream` yields `{token}` events during reason-act then a final `{done}` (full reply + trace); exposed at `POST /v1/agents/{name}/turns/stream` as SSE and rendered live in the console.
 - **Runs anywhere** — offline by default (no keys, no network); opt into a local model and live tools without touching the pipeline.
 
 ---

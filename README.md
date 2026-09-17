@@ -179,6 +179,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] A real, key-free external tool wired end to end (`weather` → Open-Meteo)
 - [x] `effector` skills with **maker-checker** approval for high-risk actions
 - [x] Per-stage **latency** in every trace, surfaced in the console
+- [x] **Streaming turns** — token-by-token over SSE, rendered live in the console
 - [ ] Persist versions in Postgres; embeddings in **pgvector**
 - [ ] Real **MCP** tool server behind the `mcp` connector
 - [ ] Long-running task mode (waits, checkpoints, resumable)

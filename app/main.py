@@ -97,6 +97,26 @@ def run_turn(name: str, req: TurnRequest) -> dict:
             "approval_id": result.approval_id, "trace": result.trace}
 
 
+@app.post("/v1/agents/{name}/turns/stream")
+def run_turn_stream(name: str, req: TurnRequest):
+    """Server-Sent Events: one `data:` line per {type:token} then a final
+    {type:done} with the full reply + trace."""
+    import json
+
+    from fastapi.responses import StreamingResponse
+    try:
+        agent = registry.get(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    def sse():
+        for event in engine.run_turn_stream(agent, req.message, session_id=req.session_id,
+                                             topic_name=req.topic, audience=req.audience):
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream")
+
+
 # ---- approvals (maker-checker) ----------------------------------------
 @app.get("/approvals")
 def list_approvals() -> list[dict]:

@@ -21,13 +21,19 @@ class StubModel:
 
     backend = "stub"
 
-    def generate(self, system: str, user: str, context: str = "") -> ModelReply:
+    def _text(self, user: str, context: str) -> str:
         ctx = f" [+{len(context)} chars context]" if context else ""
-        return ModelReply(
-            text=f"(stub){ctx} Regarding '{user.strip()}': this is a placeholder "
-            f"answer from the offline model. Set MODEL_BACKEND=ollama for a real one.",
-            backend=self.backend,
-        )
+        return (f"(stub){ctx} Regarding '{user.strip()}': this is a placeholder "
+                f"answer from the offline model. Set MODEL_BACKEND=ollama for a real one.")
+
+    def generate(self, system: str, user: str, context: str = "") -> ModelReply:
+        return ModelReply(text=self._text(user, context), backend=self.backend)
+
+    def generate_stream(self, system: str, user: str, context: str = ""):
+        """Yield the reply token by token (word-at-a-time) so callers can stream."""
+        words = self._text(user, context).split(" ")
+        for i, w in enumerate(words):
+            yield (w if i == 0 else " " + w)
 
 
 class OllamaModel:
@@ -50,6 +56,23 @@ class OllamaModel:
         )
         resp.raise_for_status()
         return ModelReply(text=resp.json().get("response", "").strip(), backend=self.backend)
+
+    def generate_stream(self, system: str, user: str, context: str = ""):
+        import json
+
+        import httpx
+
+        prompt = f"{system}\n\nContext:\n{context}\n\nUser: {user}\nAssistant:"
+        with httpx.stream("POST", f"{self.host}/api/generate",
+                          json={"model": self.model, "prompt": prompt, "stream": True},
+                          timeout=120) as resp:
+            resp.raise_for_status()
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                tok = json.loads(line).get("response", "")
+                if tok:
+                    yield tok
 
 
 def get_model():
