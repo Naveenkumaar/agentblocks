@@ -1,10 +1,12 @@
 """The turn pipeline — one generic engine for every agent.
 
-    ingress → govern → route → assemble → reason-act → guardrails-out → egress
+    ingress → govern → guardrails-in → route → assemble → reason-act
+            → effect (maker-checker) → guardrails-out → egress
 
 Each stage appends to a ``trace`` so a turn is fully explainable. No stage knows
 anything about a *specific* agent; behaviour comes entirely from the
-:class:`AgentDefinition`.
+:class:`AgentDefinition`. A high-risk effector at the ``effect`` stage suspends
+the turn for a second approver instead of executing.
 """
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ from typing import Any
 from app.connectors import build_connector
 from app.engine.definition import AgentDefinition
 from app.engine.model_gateway import get_model
-from app.governance import GovernanceError, enforce
+from app.governance import ApprovalStore, GovernanceError, enforce
 from app.guardrails import detect_injection, redact_pii, restore
 from app.knowledge import Retriever
 from app.memory import MemoryStore
@@ -25,14 +27,18 @@ class TurnResult:
     reply: str
     blocked: bool = False
     reason: str | None = None
+    suspended: bool = False
+    approval_id: str | None = None
     trace: list[dict[str, Any]] = field(default_factory=list)
 
 
 class Engine:
-    def __init__(self, memory: MemoryStore | None = None, retriever: Retriever | None = None) -> None:
+    def __init__(self, memory: MemoryStore | None = None, retriever: Retriever | None = None,
+                 approvals: ApprovalStore | None = None) -> None:
         self.model = get_model()
         self.memory = memory or MemoryStore()
         self.retriever = retriever or Retriever()
+        self.approvals = approvals or ApprovalStore()
 
     def run_turn(
         self,
@@ -91,6 +97,15 @@ class Engine:
         reply = self.model.generate(topic.system_prompt, safe_message, context)
         step("reason-act", backend=reply.backend, chars=len(reply.text))
 
+        # 6b. effect: run effector skills; suspend high-risk ones for approval
+        appr = self._run_effectors(agent, topic, safe_message, audience, step)
+        if appr is not None:
+            self.memory.append(session_id, "user", message)
+            return TurnResult(
+                reply=f"The action '{appr.skill}' needs a second approver before it "
+                      f"runs. Created approval {appr.id}.",
+                suspended=True, approval_id=appr.id, trace=trace)
+
         # 7. guardrails-out: re-mask per audience
         out = reply.text
         if vault and audience in agent.guardrails.allowed_audiences:
@@ -120,6 +135,38 @@ class Engine:
             results[skill.name] = res.data
             step("hydrate", skill=skill.name, connector=spec.name, ok=res.ok)
         return results
+
+    def _run_effectors(self, agent, topic, message, maker, step):
+        """Run effector skills. A high-risk one (risk_tier >= the agent's
+        approval_required_tier) is not executed — it creates a pending approval
+        and the turn suspends. Returns that Approval, or None if nothing suspended.
+        """
+        tier = agent.governance.approval_required_tier
+        for skill_name in topic.skills:
+            skill = next((s for s in agent.skills if s.name == skill_name), None)
+            if skill is None or skill.kind != "effector":
+                continue
+            if skill.risk_tier >= tier:
+                appr = self.approvals.create(agent.name, skill.name, maker,
+                                             {"query": message})
+                step("effect", skill=skill.name, risk_tier=skill.risk_tier,
+                     suspended=appr.id)
+                return appr
+            spec = agent.connector(skill.connector)
+            res = build_connector(spec).invoke({"query": message}) if spec else None
+            step("effect", skill=skill.name, risk_tier=skill.risk_tier,
+                 executed=True, ok=(res.ok if res else None))
+        return None
+
+    def execute_approved(self, appr, agent: AgentDefinition):
+        """Run the action behind an approved Approval (called after a checker
+        approves). Resolves the effector's connector and invokes it."""
+        skill = next((s for s in agent.skills if s.name == appr.skill), None)
+        spec = agent.connector(skill.connector) if skill else None
+        res = build_connector(spec).invoke(appr.params) if spec else None
+        appr.result = res.data if res else {"note": "no connector bound"}
+        appr.status = "executed"
+        return appr
 
 
 def _fmt_tools(tool_data: dict[str, Any]) -> str:

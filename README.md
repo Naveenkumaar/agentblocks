@@ -137,6 +137,7 @@ Versions are **immutable**; a version activates only through the eval gate.
 | [`faq-helper`](agents/faq-helper.json) | the minimal agent — one topic, knowledge only, everything else inherited |
 | [`trip-planner`](agents/trip-planner.json) | multi-tool — a **live weather tool** (Open-Meteo, no API key) over a connector + RAG over travel docs |
 | [`supervisor-router`](agents/supervisor-router.json) | supervisor that routes across specialists discovered from the registry |
+| [`mc-verify-agent`](agents/mc-verify-agent.json) | maker-checker — a tier-2 effector suspends for a second approver (`checker != maker`) |
 
 ---
 
@@ -176,9 +177,9 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 ## Roadmap
 
 - [x] A real, key-free external tool wired end to end (`weather` → Open-Meteo)
+- [x] `effector` skills with **maker-checker** approval for high-risk actions
 - [ ] Persist versions in Postgres; embeddings in **pgvector**
 - [ ] Real **MCP** tool server behind the `mcp` connector
-- [ ] `effector` skills with an approval step for high-risk actions
 - [ ] Long-running task mode (waits, checkpoints, resumable)
 - [ ] Streaming turns + a per-stage latency view in the console
 

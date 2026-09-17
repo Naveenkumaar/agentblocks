@@ -1,0 +1,31 @@
+{
+  "name": "mc-verify-agent",
+  "version": 1,
+  "description": "Maker-checker demo — a tier-2 effector suspends for a second approver (checker != maker).",
+  "default_topic": "act",
+  "topics": [
+    {
+      "name": "act",
+      "mode": "chat",
+      "system_prompt": "You help a user request a sensitive action. High-risk actions require a second person to approve before they run.",
+      "skills": ["issue-refund"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "issue-refund",
+      "kind": "effector",
+      "connector": "refunds",
+      "risk_tier": 2,
+      "description": "Issue a refund — a tier-2 action that requires maker-checker approval."
+    }
+  ],
+  "connectors": [
+    {
+      "name": "refunds",
+      "kind": "static",
+      "config": { "data": { "status": "refund issued" } }
+    }
+  ],
+  "governance": { "data_scope": "public", "approval_required_tier": 1 }
+}

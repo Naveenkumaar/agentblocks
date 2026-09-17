@@ -88,6 +88,7 @@ fully explainable end to end.
  │ 4 route     │  pick the topic
  │ 5 assemble  │  memory + knowledge(RAG) + run hydrator skills → context
  │ 6 reason-act│  call the model  (app/engine/model_gateway.py)
+ │ 6b effect   │  run effector skills; a high-risk one suspends for approval
  │ 7 guardrails-out │ re-mask per audience (restore PII only if allowed)
  │ 8 egress    │  persist to memory, return reply + trace
  └─────────────┘
@@ -252,6 +253,7 @@ the "why it looks like this."
 | **Couldn't explain an answer after the fact** | No record of why a reply happened. | Every stage appends to a `trace`; a turn is reconstructable end to end from `ingress` to `egress` (visible in the console). |
 | **Needed to demo without keys/network** | Onboarding required an API key just to see it run. | Model + connectors default to offline stubs (`StubModel`, graceful connector failure); real backends (Ollama, Open-Meteo) are opt-in via env var — no engine change. |
 | **PII leaking to logs/model** | Raw user data flowed into the model and traces. | `redact_pii` tokenizes on the way in; `restore` detokenizes only for an allowed audience on the way out — the model and traces see tokens. |
+| **One identity both requesting and authorising a risky action** | An agent could trigger a high-impact effector with no second check. | Effectors at/above `approval_required_tier` **suspend** and create an approval; `ApprovalStore.decide` enforces `checker != maker` before the action runs. |
 
 ---
 
@@ -262,6 +264,7 @@ the "why it looks like this."
 - **Live external tools** — the `weather` connector calls Open-Meteo (real geocoding + forecast, no API key) as a worked example.
 - **Grounded, guarded responses** — RAG context + PII tokenization + prompt-injection refusal on every turn.
 - **Release safety** — immutable versions, eval-gated activation, kill switch, and per-session quotas.
+- **Maker-checker on risky actions** — an `effector` skill at/above the agent's `approval_required_tier` doesn't execute; it suspends the turn and records a pending approval that a *different* person must approve (`checker != maker`) before it runs (`app/governance/approvals.py`, `POST /approvals/{id}/decide`).
 - **Full explainability** — a per-stage trace for every turn, surfaced in a self-contained operator console (Configure / Simulate / Chat).
 - **Runs anywhere** — offline by default (no keys, no network); opt into a local model and live tools without touching the pipeline.
 

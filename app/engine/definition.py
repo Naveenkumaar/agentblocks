@@ -57,6 +57,7 @@ class Governance(BaseModel):
     kill_switch: bool = False
     max_turns_per_session: int = 100
     data_scope: Literal["public", "caller_tenant"] = "public"
+    approval_required_tier: int = 1   # effector skills at/above this risk_tier need maker-checker approval
 
 
 class AgentDefinition(BaseModel):

@@ -93,7 +93,28 @@ def run_turn(name: str, req: TurnRequest) -> dict:
     result = engine.run_turn(agent, req.message, session_id=req.session_id,
                              topic_name=req.topic, audience=req.audience)
     return {"reply": result.reply, "blocked": result.blocked,
-            "reason": result.reason, "trace": result.trace}
+            "reason": result.reason, "suspended": result.suspended,
+            "approval_id": result.approval_id, "trace": result.trace}
+
+
+# ---- approvals (maker-checker) ----------------------------------------
+@app.get("/approvals")
+def list_approvals() -> list[dict]:
+    return [{"id": a.id, "agent": a.agent, "skill": a.skill, "maker": a.maker,
+             "status": a.status} for a in engine.approvals.pending()]
+
+
+@app.post("/approvals/{approval_id}/decide")
+def decide_approval(approval_id: str, checker: str, approve: bool = True) -> dict:
+    from app.governance import ApprovalError
+    try:
+        appr = engine.approvals.decide(approval_id, checker, approve)
+    except ApprovalError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    if appr.status == "approved":
+        engine.execute_approved(appr, registry.get(appr.agent))
+    return {"id": appr.id, "status": appr.status, "checker": appr.checker,
+            "result": appr.result}
 
 
 # ---- operator console -------------------------------------------------
