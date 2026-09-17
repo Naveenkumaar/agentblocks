@@ -264,6 +264,7 @@ the "why it looks like this."
 - **Live external tools** — the `weather` connector calls Open-Meteo (real geocoding + forecast, no API key); the `mcp` connector spawns a real **MCP tool server** (JSON-RPC 2.0 over stdio, `app/mcp/`) and calls a tool — the agent's skill invocation crosses a genuine protocol boundary.
 - **Grounded, guarded responses** — RAG context + PII tokenization + prompt-injection refusal on every turn.
 - **Release safety** — immutable versions, eval-gated activation, kill switch, and per-session quotas.
+- **Durable registry (optional)** — pass `db_path` (or set `AGENTBLOCKS_DB`) to persist versions + the active pointer to SQLite so they survive a restart; in-memory by default (`app/engine/registry.py`). Postgres/pgvector is the production target.
 - **Maker-checker on risky actions** — an `effector` skill at/above the agent's `approval_required_tier` doesn't execute; it suspends the turn and records a pending approval that a *different* person must approve (`checker != maker`) before it runs (`app/governance/approvals.py`, `POST /approvals/{id}/decide`).
 - **Full explainability + timing** — a per-stage trace for every turn, each stage stamped with its latency (`ms`) and a running total, surfaced in a self-contained operator console (Configure / Simulate / Chat).
 - **Streaming turns** — `run_turn_stream` yields `{token}` events during reason-act then a final `{done}` (full reply + trace); exposed at `POST /v1/agents/{name}/turns/stream` as SSE and rendered live in the console.

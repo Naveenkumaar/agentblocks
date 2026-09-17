@@ -3,21 +3,43 @@
 Versions are immutable once created. A version cannot be *activated* (made
 live) until it passes its eval gate — enforced by :meth:`activate`, which calls
 back into the eval runner.
+
+Optionally durable: pass ``db_path`` to persist versions and the active pointer
+to SQLite so they survive a restart (Postgres/pgvector is the production
+target). With no ``db_path`` the registry is in-memory, exactly as before.
 """
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 from app.engine.definition import AgentDefinition
 
 
 class Registry:
-    def __init__(self) -> None:
+    def __init__(self, db_path: str | None = None) -> None:
         # name -> {version:int -> AgentDefinition}
         self._versions: dict[str, dict[int, AgentDefinition]] = {}
         # name -> active version int
         self._active: dict[str, int] = {}
+        self._db = None
+        if db_path:
+            self._db = sqlite3.connect(db_path)
+            self._db.executescript(
+                "CREATE TABLE IF NOT EXISTS versions ("
+                "  name TEXT, version INTEGER, definition TEXT, PRIMARY KEY (name, version));"
+                "CREATE TABLE IF NOT EXISTS active (name TEXT PRIMARY KEY, version INTEGER);"
+            )
+            self._db.commit()
+            self._load()
+
+    def _load(self) -> None:
+        for name, version, definition in self._db.execute(
+                "SELECT name, version, definition FROM versions"):
+            self._versions.setdefault(name, {})[version] = AgentDefinition(**json.loads(definition))
+        for name, version in self._db.execute("SELECT name, version FROM active"):
+            self._active[name] = version
 
     # ---- authoring -----------------------------------------------------
     def add_version(self, definition: AgentDefinition) -> AgentDefinition:
@@ -27,6 +49,10 @@ class Registry:
                 f"{definition.name} v{definition.version} already exists (versions are immutable)"
             )
         versions[definition.version] = definition
+        if self._db is not None:
+            self._db.execute("INSERT INTO versions (name, version, definition) VALUES (?, ?, ?)",
+                             (definition.name, definition.version, definition.model_dump_json()))
+            self._db.commit()
         return definition
 
     def load_file(self, path: str | Path) -> AgentDefinition:
@@ -62,4 +88,9 @@ class Registry:
                 f"{name} v{version} failed the eval gate: {result.get('summary')}"
             )
         self._active[name] = version
+        if self._db is not None:
+            self._db.execute("INSERT INTO active (name, version) VALUES (?, ?) "
+                             "ON CONFLICT(name) DO UPDATE SET version = excluded.version",
+                             (name, version))
+            self._db.commit()
         return result

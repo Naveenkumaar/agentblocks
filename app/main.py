@@ -20,8 +20,11 @@ from app.engine.runtime import Engine
 sys.path.insert(0, str(Path(__file__).parents[1]))
 from evals.run_eval import make_gate  # noqa: E402
 
+import os  # noqa: E402
+
 app = FastAPI(title="agentblocks", version="0.1.0")
-registry = Registry()
+# Persist versions + active pointer if AGENTBLOCKS_DB is set (else in-memory).
+registry = Registry(os.getenv("AGENTBLOCKS_DB"))
 engine = Engine()
 _gate = make_gate()
 

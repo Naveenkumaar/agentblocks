@@ -183,7 +183,8 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Per-stage **latency** in every trace, surfaced in the console
 - [x] **Streaming turns** — token-by-token over SSE, rendered live in the console
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
-- [ ] Persist versions in Postgres; embeddings in **pgvector**
+- [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
+- [ ] Vector-search knowledge store (embeddings) in place of the keyword retriever
 - [ ] Long-running task mode (waits, checkpoints, resumable)
 
 ---
