@@ -120,7 +120,7 @@ An agent is a [`AgentDefinition`](app/engine/definition.py) — a versioned docu
 |-------|---------|
 | `topics` | chat / mission surfaces, each with a system prompt + allowed skills |
 | `skills` | `hydrator` (read) or `effector` (act, with a `risk_tier`) capabilities |
-| `connectors` | typed boundaries to the world — `http` / `mcp` / `sql` / `static` |
+| `connectors` | typed boundaries to the world — `http` / `mcp` / `sql` / `static` / `weather` |
 | `guardrails` | PII tokenize/restore + injection defense, per-audience reveal |
 | `knowledge` | doc ids for RAG retrieval |
 | `memory` | bounded session history |
@@ -138,6 +138,7 @@ Versions are **immutable**; a version activates only through the eval gate.
 | [`trip-planner`](agents/trip-planner.json) | multi-tool — a **live weather tool** (Open-Meteo, no API key) over a connector + RAG over travel docs |
 | [`supervisor-router`](agents/supervisor-router.json) | supervisor that routes across specialists discovered from the registry |
 | [`mc-verify-agent`](agents/mc-verify-agent.json) | maker-checker — a tier-2 effector suspends for a second approver (`checker != maker`) |
+| [`mcp-tools-agent`](agents/mcp-tools-agent.json) | calls a **real MCP tool server** (JSON-RPC over stdio) via the `mcp` connector |
 
 ---
 
@@ -160,15 +161,16 @@ and a CI check (`python evals/run_eval.py`).
 app/
   engine/       definition (the block model) · registry (+ activation gate) · runtime (turn pipeline) · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
-  connectors/   base (scope boundary) · http · mcp (stub) · static · weather (live Open-Meteo)
+  connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo)
   knowledge/    dependency-free keyword retriever (swap for a vector store)
   memory/       bounded session store
   governance/   kill switch · quotas
+  mcp/          a real MCP tool server (JSON-RPC over stdio) + demo tools
   ui/           console.html — self-contained operator console (no build step)
   main.py       FastAPI: control plane + runtime plane + console
-agents/         the 3 seeded JSON definitions
+agents/         the 5 seeded JSON definitions
 evals/          golden + adversarial suites + gate runner
-tests/          pytest (engine + guardrails + weather connector)
+tests/          pytest (engine · guardrails · connectors · approvals · streaming · mcp)
 ARCHITECTURE.md the full design write-up, mapped to the code
 ```
 
@@ -180,10 +182,9 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] `effector` skills with **maker-checker** approval for high-risk actions
 - [x] Per-stage **latency** in every trace, surfaced in the console
 - [x] **Streaming turns** — token-by-token over SSE, rendered live in the console
+- [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [ ] Persist versions in Postgres; embeddings in **pgvector**
-- [ ] Real **MCP** tool server behind the `mcp` connector
 - [ ] Long-running task mode (waits, checkpoints, resumable)
-- [ ] Streaming turns + a per-stage latency view in the console
 
 ---
 

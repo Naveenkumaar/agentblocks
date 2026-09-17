@@ -1,0 +1,30 @@
+{
+  "name": "mcp-tools-agent",
+  "version": 1,
+  "description": "Calls a real MCP tool server (JSON-RPC over stdio) through the mcp connector.",
+  "default_topic": "tools",
+  "topics": [
+    {
+      "name": "tools",
+      "mode": "chat",
+      "system_prompt": "You can use MCP tools to help the user. Use the tool result in your answer.",
+      "skills": ["mcp-echo"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "mcp-echo",
+      "kind": "hydrator",
+      "connector": "mcp-server",
+      "description": "Call the MCP 'echo' tool with the user's message."
+    }
+  ],
+  "connectors": [
+    {
+      "name": "mcp-server",
+      "kind": "mcp",
+      "config": { "tool": "echo" }
+    }
+  ],
+  "governance": { "data_scope": "public" }
+}

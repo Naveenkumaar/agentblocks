@@ -261,7 +261,7 @@ the "why it looks like this."
 
 - **Define an agent as data** — ship a new agent by writing a JSON definition and an eval case; zero engine code.
 - **Multi-tool turns** — a topic's hydrator skills call any mix of `http` / `mcp` / `static` / `weather` connectors, each governed by the same scope boundary.
-- **Live external tools** — the `weather` connector calls Open-Meteo (real geocoding + forecast, no API key) as a worked example.
+- **Live external tools** — the `weather` connector calls Open-Meteo (real geocoding + forecast, no API key); the `mcp` connector spawns a real **MCP tool server** (JSON-RPC 2.0 over stdio, `app/mcp/`) and calls a tool — the agent's skill invocation crosses a genuine protocol boundary.
 - **Grounded, guarded responses** — RAG context + PII tokenization + prompt-injection refusal on every turn.
 - **Release safety** — immutable versions, eval-gated activation, kill switch, and per-session quotas.
 - **Maker-checker on risky actions** — an `effector` skill at/above the agent's `approval_required_tier` doesn't execute; it suspends the turn and records a pending approval that a *different* person must approve (`checker != maker`) before it runs (`app/governance/approvals.py`, `POST /approvals/{id}/decide`).
