@@ -69,12 +69,16 @@ async function send() {
   const out = document.getElementById('out');
   out.innerHTML = `<div class="reply ${data.blocked ? 'blocked' : ''}">${data.blocked ? '⛔ ' : ''}${data.reply}${data.reason ? '\n\n(' + data.reason + ')' : ''}</div>`;
   const trace = document.createElement('div'); trace.className = 'trace';
+  const total = (data.trace || []).reduce((a, s) => a + (s.ms || 0), 0);
   (data.trace || []).forEach(s => {
     const row = document.createElement('div'); row.className = 'stage';
-    const { stage, ...rest } = s;
-    row.innerHTML = `<b>${stage}</b><span class="muted">${JSON.stringify(rest)}</span>`;
+    const { stage, ms, ...rest } = s;
+    row.innerHTML = `<b>${stage}</b><span style="min-width:56px;color:var(--accent)">${ms ?? ''} ms</span><span class="muted">${JSON.stringify(rest)}</span>`;
     trace.appendChild(row);
   });
+  const tot = document.createElement('div'); tot.className = 'stage';
+  tot.innerHTML = `<b>total</b><span style="min-width:56px;color:var(--accent)">${total.toFixed(2)} ms</span>`;
+  trace.appendChild(tot);
   out.appendChild(trace);
 }
 document.getElementById('send').onclick = send;

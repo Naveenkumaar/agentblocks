@@ -10,6 +10,7 @@ the turn for a second approver instead of executing.
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -50,9 +51,13 @@ class Engine:
         scope: dict[str, Any] | None = None,
     ) -> TurnResult:
         trace: list[dict[str, Any]] = []
+        last = [time.perf_counter()]   # per-stage timer; ms = time since previous stage
 
         def step(stage: str, **detail: Any) -> None:
-            trace.append({"stage": stage, **detail})
+            now = time.perf_counter()
+            ms = round((now - last[0]) * 1000, 2)
+            last[0] = now
+            trace.append({"stage": stage, "ms": ms, **detail})
 
         # 1. ingress
         step("ingress", chars=len(message), session=session_id)
