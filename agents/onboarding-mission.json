@@ -1,0 +1,26 @@
+{
+  "name": "onboarding-mission",
+  "version": 1,
+  "description": "Long-running mission — runs a step, waits for an external event, then resumes to completion.",
+  "default_topic": "onboard",
+  "topics": [
+    {
+      "name": "onboard",
+      "mode": "mission",
+      "system_prompt": "Onboard a new user.",
+      "steps": ["send-welcome", "wait:kyc_passed", "provision-account"],
+      "skills": ["send-welcome", "provision-account"]
+    }
+  ],
+  "skills": [
+    {"name": "send-welcome", "kind": "effector", "connector": "notify", "risk_tier": 0,
+     "description": "Send the welcome message."},
+    {"name": "provision-account", "kind": "effector", "connector": "provisioner", "risk_tier": 0,
+     "description": "Provision the account after KYC passes."}
+  ],
+  "connectors": [
+    {"name": "notify", "kind": "static", "config": {"data": {"sent": "welcome"}}},
+    {"name": "provisioner", "kind": "static", "config": {"data": {"provisioned": true}}}
+  ],
+  "governance": {"data_scope": "public"}
+}

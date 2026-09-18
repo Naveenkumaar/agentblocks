@@ -49,6 +49,9 @@ class Topic(BaseModel):
     mode: Literal["chat", "mission"] = "chat"
     system_prompt: str = ""
     skills: list[str] = Field(default_factory=list)
+    # mission-mode only: an ordered list of step specs — a skill name to run,
+    # or "wait:<event>" to pause until that event arrives.
+    steps: list[str] = Field(default_factory=list)
 
 
 class Governance(BaseModel):

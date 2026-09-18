@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.engine.definition import AgentDefinition
+from app.engine.mission import MissionRunner
 from app.engine.registry import Registry
 from app.engine.runtime import Engine
 
@@ -26,6 +27,7 @@ app = FastAPI(title="agentblocks", version="0.1.0")
 # Persist versions + active pointer if AGENTBLOCKS_DB is set (else in-memory).
 registry = Registry(os.getenv("AGENTBLOCKS_DB"))
 engine = Engine()
+missions = MissionRunner()
 _gate = make_gate()
 
 AGENTS_DIR = Path(__file__).parents[1] / "agents"
@@ -138,6 +140,32 @@ def decide_approval(approval_id: str, checker: str, approve: bool = True) -> dic
         engine.execute_approved(appr, registry.get(appr.agent))
     return {"id": appr.id, "status": appr.status, "checker": appr.checker,
             "result": appr.result}
+
+
+# ---- missions (long-running, resumable) -------------------------------
+@app.post("/v1/agents/{name}/missions")
+def start_mission(name: str, topic: str | None = None) -> dict:
+    try:
+        agent = registry.get(name)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return missions.start(agent, topic).as_dict()
+
+
+@app.get("/missions/{run_id}")
+def get_mission(run_id: str) -> dict:
+    run = missions.store.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"no such mission: {run_id}")
+    return run.as_dict()
+
+
+@app.post("/missions/{run_id}/events")
+def send_mission_event(run_id: str, event: str) -> dict:
+    run = missions.store.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"no such mission: {run_id}")
+    return missions.resume(run, event, registry.get(run.agent)).as_dict()
 
 
 # ---- operator console -------------------------------------------------

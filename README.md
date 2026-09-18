@@ -139,6 +139,7 @@ Versions are **immutable**; a version activates only through the eval gate.
 | [`supervisor-router`](agents/supervisor-router.json) | supervisor that routes across specialists discovered from the registry |
 | [`mc-verify-agent`](agents/mc-verify-agent.json) | maker-checker — a tier-2 effector suspends for a second approver (`checker != maker`) |
 | [`mcp-tools-agent`](agents/mcp-tools-agent.json) | calls a **real MCP tool server** (JSON-RPC over stdio) via the `mcp` connector |
+| [`onboarding-mission`](agents/onboarding-mission.json) | **mission mode** — run a step, `wait:` for an event, then resume to completion |
 
 ---
 
@@ -168,7 +169,7 @@ app/
   mcp/          a real MCP tool server (JSON-RPC over stdio) + demo tools
   ui/           console.html — self-contained operator console (no build step)
   main.py       FastAPI: control plane + runtime plane + console
-agents/         the 5 seeded JSON definitions
+agents/         the 6 seeded JSON definitions
 evals/          golden + adversarial suites + gate runner
 tests/          pytest (engine · guardrails · connectors · approvals · streaming · mcp)
 ARCHITECTURE.md the full design write-up, mapped to the code
@@ -185,7 +186,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
 - [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
-- [ ] Long-running task mode (waits, checkpoints, resumable)
+- [x] **Long-running mission mode** — steps with `wait:<event>`, checkpoints, resume via events
 
 ---
 
