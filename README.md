@@ -162,7 +162,7 @@ app/
   engine/       definition (the block model) · registry (+ activation gate) · runtime (turn pipeline) · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
   connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo)
-  knowledge/    dependency-free keyword retriever (swap for a vector store)
+  knowledge/    dependency-free TF-IDF cosine retriever (swap for embeddings)
   memory/       bounded session store
   governance/   kill switch · quotas
   mcp/          a real MCP tool server (JSON-RPC over stdio) + demo tools
@@ -184,7 +184,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] **Streaming turns** — token-by-token over SSE, rendered live in the console
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
-- [ ] Vector-search knowledge store (embeddings) in place of the keyword retriever
+- [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
 - [ ] Long-running task mode (waits, checkpoints, resumable)
 
 ---
