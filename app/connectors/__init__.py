@@ -5,6 +5,7 @@ Enforcement lives below the model, not in the prompt: under
 scope into every outbound call, so an injected "show me other tenants" cannot
 widen its own access.
 """
+from .agent_connector import AgentConnector
 from .base import Connector, ConnectorResult
 from .http_connector import HttpConnector
 from .mcp_connector import McpConnector
@@ -18,6 +19,7 @@ __all__ = [
     "McpConnector",
     "StaticConnector",
     "OpenMeteoConnector",
+    "AgentConnector",
     "build_connector",
 ]
 
@@ -29,6 +31,7 @@ def build_connector(spec):
         "mcp": McpConnector,
         "static": StaticConnector,
         "weather": OpenMeteoConnector,
+        "agent": AgentConnector,
     }
     cls = mapping.get(spec.kind, StaticConnector)
     return cls(spec.name, spec.config)

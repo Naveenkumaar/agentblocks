@@ -1,0 +1,30 @@
+{
+  "name": "concierge-agent",
+  "version": 1,
+  "description": "A coordinating agent that answers travel questions by delegating to the faq-helper specialist through an agent connector (agents calling agents).",
+  "default_topic": "concierge",
+  "topics": [
+    {
+      "name": "concierge",
+      "mode": "chat",
+      "system_prompt": "You are a concierge. Use the delegated specialist's answer to help the guest.",
+      "skills": ["ask-faq-helper"]
+    }
+  ],
+  "skills": [
+    {
+      "name": "ask-faq-helper",
+      "kind": "hydrator",
+      "connector": "faq-specialist",
+      "description": "Delegate the guest's question to the faq-helper agent and fold in its reply."
+    }
+  ],
+  "connectors": [
+    {
+      "name": "faq-specialist",
+      "kind": "agent",
+      "config": { "agent": "faq-helper" }
+    }
+  ],
+  "governance": { "data_scope": "public" }
+}

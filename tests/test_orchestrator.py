@@ -41,6 +41,21 @@ def test_result_is_serializable_and_summarized():
     assert all({"task", "agent", "reply"} <= set(s) for s in d["steps"])
 
 
+def test_synthesis_composes_one_answer_from_subresults():
+    res = Orchestrator(_registry()).run("plan a weather-safe trip and check refunds")
+    # the synthesis is a single non-empty answer that saw every specialist's reply
+    assert res.synthesis and res.synthesis in res.as_dict()["synthesis"]
+    assert len(res.synthesis) > 0
+    # offline stub echoes the goal into the final answer
+    assert "trip" in res.synthesis.lower() or "refund" in res.synthesis.lower()
+
+
+def test_synthesis_reports_when_nothing_routed():
+    res = Orchestrator(_registry()).run("zzzzqqqq")   # matches no specialist profile
+    assert all(s.agent is None for s in res.steps)
+    assert "No specialist" in res.synthesis
+
+
 def test_max_steps_caps_delegation():
     res = Orchestrator(_registry()).run("a and b and c and d and e and f", max_steps=3)
     assert len(res.steps) == 3

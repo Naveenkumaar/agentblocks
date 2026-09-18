@@ -120,7 +120,7 @@ An agent is a [`AgentDefinition`](app/engine/definition.py) — a versioned docu
 |-------|---------|
 | `topics` | chat / mission surfaces, each with a system prompt + allowed skills |
 | `skills` | `hydrator` (read) or `effector` (act, with a `risk_tier`) capabilities |
-| `connectors` | typed boundaries to the world — `http` / `mcp` / `sql` / `static` / `weather` |
+| `connectors` | typed boundaries to the world — `http` / `mcp` / `sql` / `static` / `weather` / `agent` (delegate to another agent) |
 | `guardrails` | PII tokenize/restore + injection defense, per-audience reveal |
 | `knowledge` | doc ids for RAG retrieval |
 | `memory` | bounded session history |
@@ -139,6 +139,7 @@ Versions are **immutable**; a version activates only through the eval gate.
 | [`supervisor-router`](agents/supervisor-router.json) | supervisor that routes across specialists discovered from the registry |
 | [`mc-verify-agent`](agents/mc-verify-agent.json) | maker-checker — a tier-2 effector suspends for a second approver (`checker != maker`) |
 | [`mcp-tools-agent`](agents/mcp-tools-agent.json) | calls a **real MCP tool server** (JSON-RPC over stdio) via the `mcp` connector |
+| [`concierge-agent`](agents/concierge-agent.json) | **agents calling agents** — delegates to `faq-helper` through an `agent` connector and folds its reply in |
 | [`onboarding-mission`](agents/onboarding-mission.json) | **mission mode** — run a step, `wait:` for an event, then resume to completion |
 
 ---
@@ -162,7 +163,7 @@ and a CI check (`python evals/run_eval.py`).
 app/
   engine/       definition · registry (+ activation gate) · runtime (turn pipeline) · orchestrator (autonomous) · mission · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
-  connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo)
+  connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo) · agent (delegate to another agent)
   knowledge/    dependency-free TF-IDF cosine retriever (swap for embeddings)
   memory/       bounded session store
   governance/   kill switch · quotas
@@ -186,7 +187,8 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
 - [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
-- [x] **Autonomous orchestration** — decompose a goal, route each sub-task to the best specialist agent (no hand-authored membership)
+- [x] **Autonomous orchestration** — decompose a goal, route each sub-task to the best specialist agent (no hand-authored membership), then **synthesize one final answer**
+- [x] **Agents calling agents** — an `agent` connector runs a sub-turn on another agent as a tool (`concierge-agent` → `faq-helper`)
 - [x] **Long-running mission mode** — steps with `wait:<event>`, checkpoints, resume via events
 
 ---

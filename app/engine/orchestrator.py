@@ -44,9 +44,11 @@ class OrchestrationResult:
     goal: str
     steps: list[OrchestrationStep] = field(default_factory=list)
     summary: str = ""
+    synthesis: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {"goal": self.goal, "summary": self.summary,
+                "synthesis": self.synthesis,
                 "steps": [s.as_dict() for s in self.steps]}
 
 
@@ -85,4 +87,24 @@ class Orchestrator:
         routed = [s for s in result.steps if s.agent]
         result.summary = (f"Delegated {len(routed)}/{len(result.steps)} sub-task(s): "
                           + "; ".join(f"{s.agent} ← “{s.task}”" for s in routed))
+        result.synthesis = self._synthesize(goal, result.steps)
         return result
+
+    def _synthesize(self, goal: str, steps: list[OrchestrationStep]) -> str:
+        """Compose one final answer from the sub-results.
+
+        The specialists' replies are handed to the model as context so it can
+        weave them into a single response to the original goal. Offline this is
+        the deterministic stub; ``MODEL_BACKEND=ollama`` makes it a real
+        synthesis. Falls back to concatenation if the model errors.
+        """
+        done = [s for s in steps if s.agent]
+        if not done:
+            return "No specialist could handle any part of the goal."
+        context = "\n".join(f"- {s.agent} on “{s.task}”: {s.reply}" for s in done)
+        try:
+            return self.engine.model.generate(
+                "Combine the specialists' findings into one answer for the guest.",
+                goal, context=context).text
+        except Exception:
+            return " ".join(s.reply for s in done)

@@ -38,7 +38,7 @@ class Connector(BaseModel):
     """A typed boundary to the outside world (the real trust boundary)."""
 
     name: str
-    kind: Literal["http", "mcp", "sql", "static", "weather"] = "static"
+    kind: Literal["http", "mcp", "sql", "static", "weather", "agent"] = "static"
     config: dict[str, Any] = Field(default_factory=dict)
 
 
