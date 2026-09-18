@@ -1,8 +1,21 @@
 """Autonomous orchestrator: decompose a goal, route each part to a specialist."""
 from pathlib import Path
 
-from app.engine.orchestrator import Orchestrator, split_goal
+from app.engine.orchestrator import Orchestrator, plan_goal, split_goal
 from app.engine.registry import Registry
+
+
+class _FakeReply:
+    def __init__(self, text): self.text = text
+
+
+class _FakeLLM:
+    """Stand-in for an Ollama-backed model that decomposes a goal to JSON."""
+    backend = "ollama"
+
+    def __init__(self, text): self._text = text
+
+    def generate(self, system, user, context=""): return _FakeReply(self._text)
 
 AGENTS = Path(__file__).parents[1] / "agents"
 
@@ -54,6 +67,24 @@ def test_synthesis_reports_when_nothing_routed():
     res = Orchestrator(_registry()).run("zzzzqqqq")   # matches no specialist profile
     assert all(s.agent is None for s in res.steps)
     assert "No specialist" in res.synthesis
+
+
+def test_planner_falls_back_to_rules_offline():
+    # no model / stub model → deterministic regex split
+    assert plan_goal("plan a trip and then check refunds") == \
+        split_goal("plan a trip and then check refunds")
+
+
+def test_planner_uses_llm_decomposition_when_available():
+    llm = _FakeLLM('Here you go: ["book the flight", "reserve a hotel", "check the weather"]')
+    assert plan_goal("arrange my trip", llm) == \
+        ["book the flight", "reserve a hotel", "check the weather"]
+
+
+def test_planner_falls_back_on_bad_llm_output():
+    llm = _FakeLLM("sorry I cannot help with that")   # no JSON array
+    assert plan_goal("plan a trip and check refunds", llm) == \
+        split_goal("plan a trip and check refunds")
 
 
 def test_max_steps_caps_delegation():

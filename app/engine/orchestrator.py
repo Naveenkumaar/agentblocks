@@ -9,6 +9,7 @@ splitter/router for an LLM planner without changing the loop.
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,30 @@ def _stem(tokens) -> set[str]:
 
 def split_goal(goal: str) -> list[str]:
     return [p.strip() for p in _SPLIT.split(goal) if p.strip()]
+
+
+_PLAN_SYSTEM = ("Decompose the user's goal into independent sub-tasks. "
+                "Reply with ONLY a JSON array of short task strings, nothing else.")
+
+
+def plan_goal(goal: str, model=None) -> list[str]:
+    """Decompose a goal into sub-tasks — LLM-backed, rule-based fallback.
+
+    With a real model (``MODEL_BACKEND=ollama``) the goal is decomposed by the
+    LLM and parsed as a JSON array; offline (stub), on a parse error, or on an
+    empty result we fall back to the deterministic regex `split_goal`. The
+    planner never raises — a bad plan degrades to the rule-based split.
+    """
+    if model is None or getattr(model, "backend", "stub") == "stub":
+        return split_goal(goal)
+    try:
+        raw = model.generate(_PLAN_SYSTEM, goal).text
+        start, end = raw.find("["), raw.rfind("]")
+        tasks = json.loads(raw[start:end + 1]) if start != -1 and end != -1 else []
+        tasks = [str(t).strip() for t in tasks if str(t).strip()]
+        return tasks or split_goal(goal)
+    except Exception:
+        return split_goal(goal)
 
 
 @dataclass
@@ -76,7 +101,7 @@ class Orchestrator:
 
     def run(self, goal: str, max_steps: int = 5) -> OrchestrationResult:
         result = OrchestrationResult(goal=goal)
-        for i, task in enumerate(split_goal(goal)[:max_steps]):
+        for i, task in enumerate(plan_goal(goal, self.engine.model)[:max_steps]):
             agent_name = self._route(task)
             if agent_name is None:
                 result.steps.append(OrchestrationStep(task, None, "(no suitable agent)"))
