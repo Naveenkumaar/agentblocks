@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.engine.definition import AgentDefinition
 from app.engine.mission import MissionRunner
+from app.engine.orchestrator import Orchestrator
 from app.engine.registry import Registry
 from app.engine.runtime import Engine
 
@@ -28,6 +29,7 @@ app = FastAPI(title="agentblocks", version="0.1.0")
 registry = Registry(os.getenv("AGENTBLOCKS_DB"))
 engine = Engine()
 missions = MissionRunner()
+orchestrator = Orchestrator(registry, engine)
 _gate = make_gate()
 
 AGENTS_DIR = Path(__file__).parents[1] / "agents"
@@ -140,6 +142,19 @@ def decide_approval(approval_id: str, checker: str, approve: bool = True) -> dic
         engine.execute_approved(appr, registry.get(appr.agent))
     return {"id": appr.id, "status": appr.status, "checker": appr.checker,
             "result": appr.result}
+
+
+class GoalRequest(BaseModel):
+    goal: str
+    max_steps: int = 5
+
+
+# ---- autonomous orchestration -----------------------------------------
+@app.post("/v1/orchestrate")
+def orchestrate(req: GoalRequest) -> dict:
+    """Decompose a goal, route each sub-task to the best specialist agent, and
+    aggregate — no hand-authored agent membership."""
+    return orchestrator.run(req.goal, max_steps=req.max_steps).as_dict()
 
 
 # ---- missions (long-running, resumable) -------------------------------

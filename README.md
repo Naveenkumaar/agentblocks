@@ -160,7 +160,7 @@ and a CI check (`python evals/run_eval.py`).
 
 ```
 app/
-  engine/       definition (the block model) · registry (+ activation gate) · runtime (turn pipeline) · model_gateway
+  engine/       definition · registry (+ activation gate) · runtime (turn pipeline) · orchestrator (autonomous) · mission · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
   connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo)
   knowledge/    dependency-free TF-IDF cosine retriever (swap for embeddings)
@@ -186,6 +186,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
 - [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
+- [x] **Autonomous orchestration** — decompose a goal, route each sub-task to the best specialist agent (no hand-authored membership)
 - [x] **Long-running mission mode** — steps with `wait:<event>`, checkpoints, resume via events
 
 ---
