@@ -161,7 +161,7 @@ and a CI check (`python evals/run_eval.py`).
 
 ```
 app/
-  engine/       definition · registry (+ activation gate) · runtime (turn pipeline) · orchestrator (autonomous) · mission · model_gateway
+  engine/       definition · registry (+ activation gate) · runtime (turn pipeline) · orchestrator (autonomous) · routing (pluggable) · mission · model_gateway
   guardrails/   redact (PII tokenize/restore) · injection (deny-list)
   connectors/   base (scope boundary) · http · mcp (real JSON-RPC server) · static · weather (live Open-Meteo) · agent (delegate to another agent)
   knowledge/    dependency-free TF-IDF cosine retriever (swap for embeddings)
@@ -187,7 +187,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
 - [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
-- [x] **Autonomous orchestration** — **LLM-planned** goal decomposition (rule-based fallback), route each sub-task to the best specialist agent (no hand-authored membership) with **explainable scores + a clarify-don't-guess** safety flag on weak/ambiguous matches, **chain dependent sub-tasks over a dependency DAG** (the planner emits explicit `deps` edges — catching dependencies even with no back-reference — and each step gets only its referenced results as context), then **synthesize one final answer**
+- [x] **Autonomous orchestration** — **LLM-planned** goal decomposition (rule-based fallback), route each sub-task to the best specialist agent (no hand-authored membership) via a **pluggable router** (`ROUTER_BACKEND`: token-overlap / TF-IDF vector / embedding, each with a deterministic fallback) with **explainable scores + a clarify-don't-guess** safety flag on weak/ambiguous matches, **chain dependent sub-tasks over a dependency DAG** (the planner emits explicit `deps` edges — catching dependencies even with no back-reference — and each step gets only its referenced results as context), then **synthesize one final answer**
 - [x] **Agents calling agents** — an `agent` connector runs a sub-turn on another agent as a tool (`concierge-agent` → `faq-helper`)
 - [x] **Long-running mission mode** — steps with `wait:<event>`, checkpoints, resume via events
 

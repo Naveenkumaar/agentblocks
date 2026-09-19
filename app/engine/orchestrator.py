@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.engine.registry import Registry
+from app.engine.routing import get_router
 from app.engine.runtime import Engine
-from app.knowledge.retriever import _tokens
 
 _SPLIT = re.compile(r"\s*(?:;|\band then\b|\bthen\b|\band also\b|\band\b)\s*", re.IGNORECASE)
 
@@ -29,11 +29,6 @@ _BACKREF = re.compile(
 
 def depends_on_prior(task: str) -> bool:
     return bool(_BACKREF.search(task))
-
-
-def _stem(tokens) -> set[str]:
-    # crude singular/plural fold so "refund" matches "refunds", "trip" ~ "trips"
-    return {(t[:-1] if t.endswith("s") and len(t) > 3 else t) for t in tokens}
 
 
 def split_goal(goal: str) -> list[str]:
@@ -143,26 +138,25 @@ class OrchestrationResult:
 
 
 class Orchestrator:
-    def __init__(self, registry: Registry, engine: Engine | None = None) -> None:
+    def __init__(self, registry: Registry, engine: Engine | None = None,
+                 router=None) -> None:
         self.registry = registry
         self.engine = engine or Engine()
+        self.router = router or get_router()   # ROUTER_BACKEND selects the default
 
-    def _profile(self, name: str) -> set[str]:
+    def _profile_text(self, name: str) -> str:
+        """The text an agent declares about itself — the routing signal."""
         d = self.registry.get(name)
         text = name + " " + d.description
         text += " " + " ".join(s.description + " " + s.name for s in d.skills)
         corpus = getattr(self.engine.retriever, "corpus", {})
         text += " " + " ".join(corpus.get(doc, "") for doc in d.knowledge)
-        return _stem(_tokens(text))
+        return text
 
-    def _rank(self, task: str) -> list[tuple[str, int]]:
-        """Score every agent by token overlap; return positives, best first."""
-        task_toks = _stem(_tokens(task))
-        scored = [(name, len(task_toks & self._profile(name)))
-                  for name in self.registry.names()]
-        scored = [(n, s) for n, s in scored if s > 0]
-        scored.sort(key=lambda x: (-x[1], x[0]))
-        return scored
+    def _rank(self, task: str) -> list[tuple[str, float]]:
+        """Rank agents for a sub-task via the active router backend."""
+        profiles = {name: self._profile_text(name) for name in self.registry.names()}
+        return self.router.rank(task, profiles)
 
     def _route(self, task: str) -> str | None:
         ranked = self._rank(task)
