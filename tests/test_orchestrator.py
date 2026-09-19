@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.engine.definition import AgentDefinition
 from app.engine.orchestrator import (
-    Orchestrator, depends_on_prior, plan_goal, split_goal,
+    Orchestrator, depends_on_prior, plan_goal, plan_steps, split_goal,
 )
 from app.engine.registry import Registry
 
@@ -154,6 +154,37 @@ def test_independent_subtasks_are_not_chained():
     r.add_version(_bare_agent("planner", "plan a trip itinerary"))
     res = Orchestrator(r).run("book a table and plan a trip")
     assert all(not s.depends_on_prior for s in res.steps)
+
+
+def test_plan_steps_fallback_infers_deps_from_backref():
+    steps = plan_steps("book a table and then email me the confirmation")
+    assert [s["task"] for s in steps] == ["book a table", "email me the confirmation"]
+    assert steps[0]["deps"] == [] and steps[1]["deps"] == [0]
+
+
+def test_plan_steps_honors_explicit_llm_edges_without_a_pronoun():
+    # the LLM declares an edge even though "write the summary" names nothing
+    llm = _FakeLLM('[{"task": "gather the data", "deps": []}, '
+                   '{"task": "write the summary", "deps": [0]}]')
+    steps = plan_steps("prepare the report", llm)
+    assert steps[1]["task"] == "write the summary"
+    assert steps[1]["deps"] == [0]                 # dependency caught with no keyword
+    assert not depends_on_prior("write the summary")   # lexical check would have missed it
+
+
+def test_plan_steps_drops_forward_and_out_of_range_deps():
+    llm = _FakeLLM('[{"task": "a", "deps": [5]}, {"task": "b", "deps": [1, 0]}]')
+    steps = plan_steps("whatever", llm)
+    assert steps[0]["deps"] == []                  # index 5 doesn't exist → dropped
+    assert steps[1]["deps"] == [0]                 # forward dep (1) dropped, 0 kept
+
+
+def test_context_for_scopes_to_referenced_deps():
+    orch = Orchestrator(_registry())
+    results = {0: "result-A", 1: "result-B"}
+    ctx = orch._context_for([0], results)
+    assert "result-A" in ctx and "result-B" not in ctx      # only the referenced dep
+    assert orch._context_for([], results) is None           # no deps → no context
 
 
 def test_max_steps_caps_delegation():

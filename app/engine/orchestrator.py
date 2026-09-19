@@ -64,6 +64,51 @@ def plan_goal(goal: str, model=None) -> list[str]:
         return split_goal(goal)
 
 
+_PLAN_DAG_SYSTEM = (
+    "Decompose the user's goal into ordered sub-tasks with dependencies. "
+    "Reply with ONLY a JSON array of objects "
+    '[{"task": "...", "deps": [earlier indices this task needs]}]. '
+    "deps are 0-based indices of earlier tasks; use [] for independent tasks. "
+    "Declare a dependency whenever a task needs an earlier task's result, even "
+    "if it does not mention it explicitly.")
+
+
+def _infer_deps(tasks: list[str]) -> list[dict[str, Any]]:
+    """Rule-based edges: a back-referencing task depends on all earlier ones."""
+    steps: list[dict[str, Any]] = []
+    for i, t in enumerate(tasks):
+        steps.append({"task": t, "deps": list(range(i)) if depends_on_prior(t) else []})
+    return steps
+
+
+def plan_steps(goal: str, model=None) -> list[dict[str, Any]]:
+    """Plan a goal into ``[{task, deps}]`` — LLM edges, rule-based fallback.
+
+    With a real model the planner can declare **explicit dependency edges**, so a
+    task that needs an earlier result but never names it is still ordered
+    correctly. Offline / on any parse error we fall back to `split_goal` +
+    lexical back-reference inference. Never raises. Out-of-range or forward deps
+    are dropped, so the result is always a valid DAG in task order.
+    """
+    if model is None or getattr(model, "backend", "stub") == "stub":
+        return _infer_deps(split_goal(goal))
+    try:
+        raw = model.generate(_PLAN_DAG_SYSTEM, goal).text
+        start, end = raw.find("["), raw.rfind("]")
+        data = json.loads(raw[start:end + 1]) if start != -1 and end != -1 else []
+        steps: list[dict[str, Any]] = []
+        for i, item in enumerate(data):
+            task = str(item.get("task", "")).strip()
+            if not task:
+                continue
+            deps = sorted({d for d in item.get("deps", [])
+                           if isinstance(d, int) and 0 <= d < i})
+            steps.append({"task": task, "deps": deps})
+        return steps or _infer_deps(split_goal(goal))
+    except Exception:
+        return _infer_deps(split_goal(goal))
+
+
 @dataclass
 class OrchestrationStep:
     task: str
@@ -74,13 +119,14 @@ class OrchestrationStep:
     alternatives: list = field(default_factory=list)  # [{"agent","score"}, ...]
     needs_clarification: bool = False
     depends_on_prior: bool = False                 # chained on earlier results
+    deps: list = field(default_factory=list)       # indices of steps this one needs
 
     def as_dict(self) -> dict[str, Any]:
         return {"task": self.task, "agent": self.agent, "reply": self.reply,
                 "score": self.score, "confidence": self.confidence,
                 "alternatives": self.alternatives,
                 "needs_clarification": self.needs_clarification,
-                "depends_on_prior": self.depends_on_prior}
+                "depends_on_prior": self.depends_on_prior, "deps": self.deps}
 
 
 @dataclass
@@ -145,18 +191,25 @@ class Orchestrator:
         return OrchestrationStep(task, ranked[0][0], "", score=ranked[0][1],
                                  confidence="high", alternatives=alts)
 
+    def _context_for(self, deps: list[int], results: dict[int, str]) -> str | None:
+        """Assemble context from ONLY the referenced dependency results."""
+        chosen = [results[d] for d in deps if d in results]
+        return ("Earlier results:\n" + "\n".join(chosen)) if chosen else None
+
     def run(self, goal: str, max_steps: int = 5) -> OrchestrationResult:
         result = OrchestrationResult(goal=goal)
-        prior: list[str] = []          # accumulated results, fed to dependent sub-tasks
-        for i, task in enumerate(plan_goal(goal, self.engine.model)[:max_steps]):
+        results: dict[int, str] = {}   # index → that step's result, for dependents
+        for i, pstep in enumerate(plan_steps(goal, self.engine.model)[:max_steps]):
+            task, deps = pstep["task"], [d for d in pstep["deps"] if d in results]
             step = self._decide(task)
-            step.depends_on_prior = depends_on_prior(task) and bool(prior)
+            step.deps = deps
+            step.depends_on_prior = bool(deps)
             if step.agent is not None:
-                ctx = ("Earlier results:\n" + "\n".join(prior)) if step.depends_on_prior else None
+                ctx = self._context_for(deps, results)
                 turn = self.engine.run_turn(self.registry.get(step.agent), task,
                                             session_id=f"orch-{i}", extra_context=ctx)
                 step.reply = turn.reply
-                prior.append(f"- {step.agent} on “{task}”: {step.reply}")
+                results[i] = f"- {step.agent} on “{task}”: {step.reply}"
             result.steps.append(step)
         routed = [s for s in result.steps if s.agent]
         unclear = [s for s in result.steps if s.needs_clarification]
