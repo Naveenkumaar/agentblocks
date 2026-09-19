@@ -1,8 +1,19 @@
 """Autonomous orchestrator: decompose a goal, route each part to a specialist."""
 from pathlib import Path
 
-from app.engine.orchestrator import Orchestrator, plan_goal, split_goal
+from app.engine.definition import AgentDefinition
+from app.engine.orchestrator import (
+    Orchestrator, depends_on_prior, plan_goal, split_goal,
+)
 from app.engine.registry import Registry
+
+
+def _bare_agent(name, description):
+    """A minimal agent with no knowledge, so its context is empty unless injected."""
+    return AgentDefinition(
+        name=name, version=1, description=description, default_topic="main",
+        topics=[{"name": "main", "mode": "chat",
+                 "system_prompt": "help", "skills": []}])
 
 
 class _FakeReply:
@@ -104,21 +115,45 @@ def test_no_match_asks_to_clarify_instead_of_guessing():
 
 
 def test_tie_is_flagged_ambiguous_not_guessed():
-    from app.engine.definition import AgentDefinition
     r = Registry()
     # two agents whose only distinctive token is the same → a one-word task ties
     for name in ("alpha-widget", "beta-widget"):
-        r.add_version(AgentDefinition(
-            name=name, version=1, description="handles widget requests",
-            default_topic="main",
-            topics=[{"name": "main", "mode": "chat",
-                     "system_prompt": "help with widgets", "skills": []}]))
+        r.add_version(_bare_agent(name, "handles widget requests"))
     res = Orchestrator(r).run("widget")
     step = res.steps[0]
     assert step.agent is None and step.confidence == "low"
     assert step.needs_clarification
     assert {a["agent"] for a in step.alternatives} == {"alpha-widget", "beta-widget"}
     assert "need clarification" in res.summary
+
+
+def test_backref_detection():
+    assert depends_on_prior("email me the confirmation")
+    assert depends_on_prior("send it to my phone")
+    assert not depends_on_prior("plan a trip to Rome")
+
+
+def test_dependent_subtask_receives_prior_result():
+    r = Registry()
+    r.add_version(_bare_agent("booker", "book a table reservation"))
+    r.add_version(_bare_agent("notifier", "email send confirmation notification message"))
+    res = Orchestrator(r).run("book a table and then email me the confirmation")
+    assert len(res.steps) == 2
+    first, second = res.steps
+    assert first.agent == "booker" and not first.depends_on_prior
+    assert second.agent == "notifier" and second.depends_on_prior
+    # the bare agents have no knowledge, so context is empty UNLESS a prior result
+    # was injected — the stub model echoes "[+N chars context]" only when it was.
+    assert "chars context" not in first.reply
+    assert "chars context" in second.reply          # prior booking result flowed in
+
+
+def test_independent_subtasks_are_not_chained():
+    r = Registry()
+    r.add_version(_bare_agent("booker", "book a table reservation"))
+    r.add_version(_bare_agent("planner", "plan a trip itinerary"))
+    res = Orchestrator(r).run("book a table and plan a trip")
+    assert all(not s.depends_on_prior for s in res.steps)
 
 
 def test_max_steps_caps_delegation():

@@ -49,6 +49,7 @@ class Engine:
         topic_name: str | None = None,
         audience: str = "user",
         scope: dict[str, Any] | None = None,
+        extra_context: str | None = None,
     ) -> TurnResult:
         trace: list[dict[str, Any]] = []
         last = [time.perf_counter()]   # per-stage timer; ms = time since previous stage
@@ -93,10 +94,11 @@ class Engine:
         knowledge = self.retriever.retrieve(safe_message, agent.knowledge) if agent.knowledge else []
         tool_data = self._run_hydrators(agent, topic, safe_message, scope, step)
         context = "\n".join(
-            filter(None, [history, "\n".join(knowledge), _fmt_tools(tool_data)])
+            filter(None, [extra_context, history, "\n".join(knowledge), _fmt_tools(tool_data)])
         )
         step("assemble", history_turns=self.memory.turn_count(session_id),
-             knowledge=len(knowledge), tools=len(tool_data))
+             knowledge=len(knowledge), tools=len(tool_data),
+             injected=bool(extra_context))
 
         # 6. reason-act: the model call
         reply = self.model.generate(topic.system_prompt, safe_message, context)

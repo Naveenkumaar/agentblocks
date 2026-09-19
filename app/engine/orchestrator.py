@@ -20,6 +20,16 @@ from app.knowledge.retriever import _tokens
 
 _SPLIT = re.compile(r"\s*(?:;|\band then\b|\bthen\b|\band also\b|\band\b)\s*", re.IGNORECASE)
 
+# a sub-task that points back at an earlier one's output — makes it dependent
+_BACKREF = re.compile(
+    r"\b(it|its|it'?s|that|this|these|those|them|they|"
+    r"the (booking|reservation|confirmation|result|answer|trip|table|order|details?))\b",
+    re.IGNORECASE)
+
+
+def depends_on_prior(task: str) -> bool:
+    return bool(_BACKREF.search(task))
+
 
 def _stem(tokens) -> set[str]:
     # crude singular/plural fold so "refund" matches "refunds", "trip" ~ "trips"
@@ -63,12 +73,14 @@ class OrchestrationStep:
     confidence: str = "none"                       # high | low | none
     alternatives: list = field(default_factory=list)  # [{"agent","score"}, ...]
     needs_clarification: bool = False
+    depends_on_prior: bool = False                 # chained on earlier results
 
     def as_dict(self) -> dict[str, Any]:
         return {"task": self.task, "agent": self.agent, "reply": self.reply,
                 "score": self.score, "confidence": self.confidence,
                 "alternatives": self.alternatives,
-                "needs_clarification": self.needs_clarification}
+                "needs_clarification": self.needs_clarification,
+                "depends_on_prior": self.depends_on_prior}
 
 
 @dataclass
@@ -135,12 +147,16 @@ class Orchestrator:
 
     def run(self, goal: str, max_steps: int = 5) -> OrchestrationResult:
         result = OrchestrationResult(goal=goal)
+        prior: list[str] = []          # accumulated results, fed to dependent sub-tasks
         for i, task in enumerate(plan_goal(goal, self.engine.model)[:max_steps]):
             step = self._decide(task)
+            step.depends_on_prior = depends_on_prior(task) and bool(prior)
             if step.agent is not None:
+                ctx = ("Earlier results:\n" + "\n".join(prior)) if step.depends_on_prior else None
                 turn = self.engine.run_turn(self.registry.get(step.agent), task,
-                                            session_id=f"orch-{i}")
+                                            session_id=f"orch-{i}", extra_context=ctx)
                 step.reply = turn.reply
+                prior.append(f"- {step.agent} on “{task}”: {step.reply}")
             result.steps.append(step)
         routed = [s for s in result.steps if s.agent]
         unclear = [s for s in result.steps if s.needs_clarification]
