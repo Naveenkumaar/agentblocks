@@ -187,7 +187,7 @@ ARCHITECTURE.md the full design write-up, mapped to the code
 - [x] Real **MCP** tool server (JSON-RPC over stdio) behind the `mcp` connector
 - [x] Persist versions + active pointer (SQLite; `AGENTBLOCKS_DB=agents.db`) — Postgres/pgvector is the production target
 - [x] Vector-search knowledge store — **TF-IDF cosine** retriever (dependency-free); embeddings/pgvector next
-- [x] **Autonomous orchestration** — **LLM-planned** goal decomposition (rule-based fallback), route each sub-task to the best specialist agent (no hand-authored membership), then **synthesize one final answer**
+- [x] **Autonomous orchestration** — **LLM-planned** goal decomposition (rule-based fallback), route each sub-task to the best specialist agent (no hand-authored membership) with **explainable scores + a clarify-don't-guess** safety flag on weak/ambiguous matches, then **synthesize one final answer**
 - [x] **Agents calling agents** — an `agent` connector runs a sub-turn on another agent as a tool (`concierge-agent` → `faq-helper`)
 - [x] **Long-running mission mode** — steps with `wait:<event>`, checkpoints, resume via events
 

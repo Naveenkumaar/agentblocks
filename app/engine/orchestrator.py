@@ -59,9 +59,16 @@ class OrchestrationStep:
     task: str
     agent: str | None
     reply: str
+    score: int = 0
+    confidence: str = "none"                       # high | low | none
+    alternatives: list = field(default_factory=list)  # [{"agent","score"}, ...]
+    needs_clarification: bool = False
 
     def as_dict(self) -> dict[str, Any]:
-        return {"task": self.task, "agent": self.agent, "reply": self.reply}
+        return {"task": self.task, "agent": self.agent, "reply": self.reply,
+                "score": self.score, "confidence": self.confidence,
+                "alternatives": self.alternatives,
+                "needs_clarification": self.needs_clarification}
 
 
 @dataclass
@@ -90,28 +97,57 @@ class Orchestrator:
         text += " " + " ".join(corpus.get(doc, "") for doc in d.knowledge)
         return _stem(_tokens(text))
 
-    def _route(self, task: str) -> str | None:
+    def _rank(self, task: str) -> list[tuple[str, int]]:
+        """Score every agent by token overlap; return positives, best first."""
         task_toks = _stem(_tokens(task))
-        best, best_score = None, 0
-        for name in self.registry.names():
-            score = len(task_toks & self._profile(name))
-            if score > best_score:
-                best, best_score = name, score
-        return best
+        scored = [(name, len(task_toks & self._profile(name)))
+                  for name in self.registry.names()]
+        scored = [(n, s) for n, s in scored if s > 0]
+        scored.sort(key=lambda x: (-x[1], x[0]))
+        return scored
+
+    def _route(self, task: str) -> str | None:
+        ranked = self._rank(task)
+        return ranked[0][0] if ranked else None
+
+    def _decide(self, task: str) -> OrchestrationStep:
+        """Pick an agent for a sub-task, or flag it when the choice is unsafe.
+
+        - no positive match  → confidence "none", ask to clarify (don't guess).
+        - top two tied        → confidence "low", ambiguous, ask to clarify.
+        - a clear winner      → confidence "high", delegate.
+        """
+        ranked = self._rank(task)
+        alts = [{"agent": n, "score": s} for n, s in ranked[:3]]
+        if not ranked:
+            return OrchestrationStep(task, None,
+                                     "(no suitable specialist — please clarify the request)",
+                                     score=0, confidence="none", needs_clarification=True)
+        if len(ranked) >= 2 and ranked[0][1] == ranked[1][1]:
+            tied = [n for n, s in ranked if s == ranked[0][1]]
+            return OrchestrationStep(
+                task, None,
+                f"(ambiguous — could be {', '.join(tied)}; please clarify)",
+                score=ranked[0][1], confidence="low", alternatives=alts,
+                needs_clarification=True)
+        return OrchestrationStep(task, ranked[0][0], "", score=ranked[0][1],
+                                 confidence="high", alternatives=alts)
 
     def run(self, goal: str, max_steps: int = 5) -> OrchestrationResult:
         result = OrchestrationResult(goal=goal)
         for i, task in enumerate(plan_goal(goal, self.engine.model)[:max_steps]):
-            agent_name = self._route(task)
-            if agent_name is None:
-                result.steps.append(OrchestrationStep(task, None, "(no suitable agent)"))
-                continue
-            turn = self.engine.run_turn(self.registry.get(agent_name), task,
-                                        session_id=f"orch-{i}")
-            result.steps.append(OrchestrationStep(task, agent_name, turn.reply))
+            step = self._decide(task)
+            if step.agent is not None:
+                turn = self.engine.run_turn(self.registry.get(step.agent), task,
+                                            session_id=f"orch-{i}")
+                step.reply = turn.reply
+            result.steps.append(step)
         routed = [s for s in result.steps if s.agent]
+        unclear = [s for s in result.steps if s.needs_clarification]
         result.summary = (f"Delegated {len(routed)}/{len(result.steps)} sub-task(s): "
                           + "; ".join(f"{s.agent} ← “{s.task}”" for s in routed))
+        if unclear:
+            result.summary += f" · {len(unclear)} need clarification"
         result.synthesis = self._synthesize(goal, result.steps)
         return result
 

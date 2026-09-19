@@ -87,6 +87,40 @@ def test_planner_falls_back_on_bad_llm_output():
         split_goal("plan a trip and check refunds")
 
 
+def test_clear_match_is_high_confidence_with_scores():
+    res = Orchestrator(_registry()).run("check the refund policy")
+    step = res.steps[0]
+    assert step.agent == "faq-helper" and step.confidence == "high"
+    assert step.score > 0
+    assert step.alternatives and step.alternatives[0]["agent"] == "faq-helper"
+    assert not step.needs_clarification
+
+
+def test_no_match_asks_to_clarify_instead_of_guessing():
+    res = Orchestrator(_registry()).run("zzzzqqqq")
+    step = res.steps[0]
+    assert step.agent is None and step.confidence == "none"
+    assert step.needs_clarification and "clarify" in step.reply.lower()
+
+
+def test_tie_is_flagged_ambiguous_not_guessed():
+    from app.engine.definition import AgentDefinition
+    r = Registry()
+    # two agents whose only distinctive token is the same → a one-word task ties
+    for name in ("alpha-widget", "beta-widget"):
+        r.add_version(AgentDefinition(
+            name=name, version=1, description="handles widget requests",
+            default_topic="main",
+            topics=[{"name": "main", "mode": "chat",
+                     "system_prompt": "help with widgets", "skills": []}]))
+    res = Orchestrator(r).run("widget")
+    step = res.steps[0]
+    assert step.agent is None and step.confidence == "low"
+    assert step.needs_clarification
+    assert {a["agent"] for a in step.alternatives} == {"alpha-widget", "beta-widget"}
+    assert "need clarification" in res.summary
+
+
 def test_max_steps_caps_delegation():
     res = Orchestrator(_registry()).run("a and b and c and d and e and f", max_steps=3)
     assert len(res.steps) == 3
