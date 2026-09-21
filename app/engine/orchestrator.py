@@ -130,11 +130,32 @@ class OrchestrationResult:
     steps: list[OrchestrationStep] = field(default_factory=list)
     summary: str = ""
     synthesis: str = ""
+    layers: list = field(default_factory=list)   # topological layers of step indices
 
     def as_dict(self) -> dict[str, Any]:
         return {"goal": self.goal, "summary": self.summary,
-                "synthesis": self.synthesis,
+                "synthesis": self.synthesis, "layers": self.layers,
                 "steps": [s.as_dict() for s in self.steps]}
+
+
+def schedule_layers(steps: list[dict]) -> list[list[int]]:
+    """Group step indices into topological layers by their `deps`.
+
+    Layer 0 is every step with no dependencies; a step lands one layer past its
+    deepest dependency. Steps in the same layer are independent, so a distributed
+    executor could run each layer in parallel. Deps must point backwards (a valid
+    DAG in order), which `plan_steps` / `_normalize_plan` guarantee.
+    """
+    depth: dict[int, int] = {}
+    layers: list[list[int]] = []
+    for i, s in enumerate(steps):
+        deps = s.get("deps", [])
+        d = 0 if not deps else 1 + max(depth[dep] for dep in deps)
+        depth[i] = d
+        while len(layers) <= d:
+            layers.append([])
+        layers[d].append(i)
+    return layers
 
 
 class Orchestrator:
@@ -216,15 +237,15 @@ class Orchestrator:
                             "routed_agent": d.agent, "confidence": d.confidence,
                             "alternatives": d.alternatives,
                             "needs_clarification": d.needs_clarification})
-        return {"goal": goal, "steps": preview}
+        return {"goal": goal, "steps": preview, "layers": schedule_layers(steps)}
 
     def run(self, goal: str = "", max_steps: int = 5,
             plan: list[dict] | None = None) -> OrchestrationResult:
         steps = (self._normalize_plan(plan) if plan is not None
-                 else plan_steps(goal, self.engine.model))
-        result = OrchestrationResult(goal=goal)
+                 else plan_steps(goal, self.engine.model))[:max_steps]
+        result = OrchestrationResult(goal=goal, layers=schedule_layers(steps))
         results: dict[int, str] = {}   # index → that step's result, for dependents
-        for i, pstep in enumerate(steps[:max_steps]):
+        for i, pstep in enumerate(steps):
             task, deps = pstep["task"], [d for d in pstep["deps"] if d in results]
             step = self._decide(task)
             step.deps = deps
