@@ -9,6 +9,7 @@ Define any number of AI agents entirely as **versioned JSON documents of blocks*
 interpreted by a single definition-driven engine. Nothing about any specific
 agent lives in code.
 
+[![CI](https://github.com/Naveenkumaar/agentblocks/actions/workflows/ci.yml/badge.svg)](https://github.com/Naveenkumaar/agentblocks/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](app/main.py)
 [![Pydantic](https://img.shields.io/badge/Config-Pydantic_v2-E92063)](app/engine/definition.py)
@@ -69,6 +70,9 @@ Runs **offline with no API key** — the default model backend is a deterministi
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+
+# ⭐ one-command end-to-end demo of the autonomous multi-agent system
+.venv/bin/python scripts/demo.py
 
 # validate the seeded agents
 .venv/bin/python scripts/seed.py
