@@ -190,10 +190,41 @@ class Orchestrator:
         chosen = [results[d] for d in deps if d in results]
         return ("Earlier results:\n" + "\n".join(chosen)) if chosen else None
 
-    def run(self, goal: str, max_steps: int = 5) -> OrchestrationResult:
+    @staticmethod
+    def _normalize_plan(steps: list[dict]) -> list[dict]:
+        """Clamp a (possibly caller-edited) plan to a valid DAG in task order."""
+        clean = []
+        for i, ps in enumerate(steps):
+            task = str(ps.get("task", "")).strip()
+            if not task:
+                continue
+            deps = sorted({d for d in ps.get("deps", []) if isinstance(d, int) and 0 <= d < i})
+            clean.append({"task": task, "deps": deps})
+        return clean
+
+    def plan(self, goal: str, max_steps: int = 5) -> dict[str, Any]:
+        """Preview the plan — decomposition, edges, and routing — WITHOUT running.
+
+        A caller can inspect or edit the returned ``steps`` (tasks and ``deps``)
+        and pass them back to ``run(plan=...)`` to execute that exact plan.
+        """
+        steps = plan_steps(goal, self.engine.model)[:max_steps]
+        preview = []
+        for i, ps in enumerate(steps):
+            d = self._decide(ps["task"])
+            preview.append({"index": i, "task": ps["task"], "deps": ps["deps"],
+                            "routed_agent": d.agent, "confidence": d.confidence,
+                            "alternatives": d.alternatives,
+                            "needs_clarification": d.needs_clarification})
+        return {"goal": goal, "steps": preview}
+
+    def run(self, goal: str = "", max_steps: int = 5,
+            plan: list[dict] | None = None) -> OrchestrationResult:
+        steps = (self._normalize_plan(plan) if plan is not None
+                 else plan_steps(goal, self.engine.model))
         result = OrchestrationResult(goal=goal)
         results: dict[int, str] = {}   # index → that step's result, for dependents
-        for i, pstep in enumerate(plan_steps(goal, self.engine.model)[:max_steps]):
+        for i, pstep in enumerate(steps[:max_steps]):
             task, deps = pstep["task"], [d for d in pstep["deps"] if d in results]
             step = self._decide(task)
             step.deps = deps

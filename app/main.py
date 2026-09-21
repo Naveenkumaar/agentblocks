@@ -145,16 +145,25 @@ def decide_approval(approval_id: str, checker: str, approve: bool = True) -> dic
 
 
 class GoalRequest(BaseModel):
-    goal: str
+    goal: str = ""
     max_steps: int = 5
+    plan: list[dict] | None = None   # supply an edited plan to run it verbatim
 
 
 # ---- autonomous orchestration -----------------------------------------
+@app.post("/v1/plan")
+def plan(req: GoalRequest) -> dict:
+    """Preview the plan (decomposition + dependency edges + routing) without
+    running it — inspect or edit `steps`, then POST them to /v1/orchestrate."""
+    return orchestrator.plan(req.goal, max_steps=req.max_steps)
+
+
 @app.post("/v1/orchestrate")
 def orchestrate(req: GoalRequest) -> dict:
     """Decompose a goal, route each sub-task to the best specialist agent, and
-    aggregate — no hand-authored agent membership."""
-    return orchestrator.run(req.goal, max_steps=req.max_steps).as_dict()
+    aggregate — no hand-authored agent membership. Pass `plan` to run an edited
+    plan verbatim instead of decomposing the goal."""
+    return orchestrator.run(req.goal, max_steps=req.max_steps, plan=req.plan).as_dict()
 
 
 # ---- missions (long-running, resumable) -------------------------------
