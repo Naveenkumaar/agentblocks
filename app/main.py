@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.engine.definition import AgentDefinition
+from app.events import bus
 from app.engine.mission import MissionRunner
 from app.engine.orchestrator import Orchestrator
 from app.engine.registry import Registry
@@ -101,7 +102,8 @@ def run_turn(name: str, req: TurnRequest) -> dict:
                              topic_name=req.topic, audience=req.audience)
     return {"reply": result.reply, "blocked": result.blocked,
             "reason": result.reason, "suspended": result.suspended,
-            "approval_id": result.approval_id, "trace": result.trace}
+            "approval_id": result.approval_id, "run_id": result.run_id,
+            "trace": result.trace}
 
 
 @app.post("/v1/agents/{name}/turns/stream")
@@ -190,6 +192,20 @@ def send_mission_event(run_id: str, event: str) -> dict:
     if run is None:
         raise HTTPException(status_code=404, detail=f"no such mission: {run_id}")
     return missions.resume(run, event, registry.get(run.agent)).as_dict()
+
+
+# ---- agent map / execution timeline -----------------------------------
+@app.get("/events")
+def events(limit: int = 200, since_seq: int = 0) -> dict:
+    """Recent normalized runtime events (ascending). Poll with the last `seq`
+    you saw (`since_seq`) to stream only new ones."""
+    return {"events": bus.recent(limit=max(1, min(limit, 2000)), since_seq=since_seq)}
+
+
+@app.get("/events/runs")
+def event_runs(limit: int = 25) -> dict:
+    """Recent runs grouped for the agent map (newest first)."""
+    return {"runs": bus.runs(limit=max(1, min(limit, 100)))}
 
 
 # ---- operator console -------------------------------------------------

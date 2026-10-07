@@ -40,6 +40,10 @@
       <div><button id="send">Run turn</button></div>
       <div id="out"></div>
     </section>
+    <aside class="mapcol">
+      <h2>Agent map <span class="muted" style="font-weight:400">· live</span></h2>
+      <div id="agentmap" class="muted">No runs yet.</div>
+    </aside>
   </main>
 <script>
 let active = null;
@@ -100,6 +104,37 @@ async function send() {
   trace.appendChild(tot);
   out.appendChild(trace);
 }
+// ---- live agent map: normalized runtime events grouped by run ----
+function statusColor(s) {
+  if (s === 'run.completed') return '#36d399';
+  if (s === 'run.blocked' || s === 'run.failed') return '#f87272';
+  if (s === 'run.approval_required') return '#fbbd23';
+  return 'var(--accent)';
+}
+async function loadAgentMap() {
+  try {
+    const { runs } = await (await fetch('/events/runs?limit=12')).json();
+    const box = document.getElementById('agentmap');
+    if (!runs.length) { box.textContent = 'No runs yet.'; return; }
+    box.innerHTML = '';
+    runs.forEach(r => {
+      const card = document.createElement('div'); card.className = 'trace';
+      const head = document.createElement('div'); head.className = 'stage';
+      head.innerHTML = `<b>${r.agent}</b><span class="muted">${r.run_id.slice(0,8)}</span>`
+        + `<span style="margin-left:auto;color:${statusColor(r.status)}">${r.status.replace('run.','')}</span>`;
+      card.appendChild(head);
+      r.events.filter(e => e.type === 'run.stage').forEach(e => {
+        const row = document.createElement('div'); row.className = 'stage';
+        const ms = e.detail && e.detail.ms != null ? e.detail.ms + ' ms' : '';
+        row.innerHTML = `<span style="min-width:90px">${e.stage}</span><span class="muted">${ms}</span>`;
+        card.appendChild(row);
+      });
+      box.appendChild(card);
+    });
+  } catch (e) { /* poll silently; map is best-effort */ }
+}
+setInterval(loadAgentMap, 2000); loadAgentMap();
+
 document.getElementById('send').onclick = send;
 loadAgents();
 </script>

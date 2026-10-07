@@ -11,12 +11,14 @@ the turn for a second approver instead of executing.
 from __future__ import annotations
 
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.connectors import build_connector
 from app.engine.definition import AgentDefinition
 from app.engine.model_gateway import get_model
+from app.events import EventType, bus
 from app.governance import ApprovalStore, GovernanceError, enforce
 from app.guardrails import detect_injection, redact_pii, restore
 from app.knowledge import Retriever
@@ -30,6 +32,7 @@ class TurnResult:
     reason: str | None = None
     suspended: bool = False
     approval_id: str | None = None
+    run_id: str | None = None
     trace: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -51,6 +54,40 @@ class Engine:
         scope: dict[str, Any] | None = None,
         extra_context: str | None = None,
     ) -> TurnResult:
+        """Public turn entry. Emits the normalized run lifecycle (run.started →
+        per-stage → one terminal event) to the event bus that drives the console's
+        agent map, then returns the TurnResult. Emission is best-effort and never
+        changes the reply."""
+        run_id = uuid.uuid4().hex[:12]
+        bus.emit(run_id, agent.name, EventType.RUN_STARTED, chars=len(message),
+                 session=session_id)
+        try:
+            result = self._run_turn(agent, message, session_id, topic_name,
+                                    audience, scope, extra_context, run_id=run_id)
+        except Exception as exc:  # noqa: BLE001
+            bus.emit(run_id, agent.name, EventType.RUN_FAILED, error=str(exc)[:200])
+            raise
+        if result.suspended:
+            bus.emit(run_id, agent.name, EventType.APPROVAL_REQUIRED,
+                     approval_id=result.approval_id)
+        elif result.blocked:
+            bus.emit(run_id, agent.name, EventType.RUN_BLOCKED, reason=result.reason)
+        else:
+            bus.emit(run_id, agent.name, EventType.RUN_COMPLETED, chars=len(result.reply))
+        result.run_id = run_id
+        return result
+
+    def _run_turn(
+        self,
+        agent: AgentDefinition,
+        message: str,
+        session_id: str = "default",
+        topic_name: str | None = None,
+        audience: str = "user",
+        scope: dict[str, Any] | None = None,
+        extra_context: str | None = None,
+        run_id: str = "",
+    ) -> TurnResult:
         trace: list[dict[str, Any]] = []
         last = [time.perf_counter()]   # per-stage timer; ms = time since previous stage
 
@@ -59,6 +96,8 @@ class Engine:
             ms = round((now - last[0]) * 1000, 2)
             last[0] = now
             trace.append({"stage": stage, "ms": ms, **detail})
+            if run_id:
+                bus.emit(run_id, agent.name, EventType.STAGE, stage=stage, ms=ms, **detail)
 
         # 1. ingress
         step("ingress", chars=len(message), session=session_id)

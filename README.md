@@ -116,6 +116,24 @@ Every stage appends to a `trace`, so each answer is explainable end to end (see 
 
 ---
 
+## Observability — the live agent map
+
+Every turn also emits a **normalized event stream** ([`app/events.py`](app/events.py)) — one
+`run.started`, one `run.stage` per pipeline stage, and exactly one terminal event
+(`run.completed` / `run.blocked` / `run.approval_required` / `run.failed`). It is a safe,
+structured view of *what the runtime is doing* — current stage, agent, status — and never
+exposes the model's private reasoning.
+
+- `GET /events?since_seq=<n>` — poll the raw event feed (stream only what's new).
+- `GET /events/runs` — events grouped per run (newest first), including sub-agent
+  delegations as their own runs.
+- The operator console renders this as a **live agent map** that updates as turns run.
+
+The bus is in-process and bounded (a ring buffer); emission is best-effort, so it can never
+slow or break a turn.
+
+---
+
 ## The agent-definition model
 
 An agent is a [`AgentDefinition`](app/engine/definition.py) — a versioned document of blocks:
@@ -171,6 +189,7 @@ app/
   knowledge/    dependency-free TF-IDF cosine retriever + HyDE (hypothetical-document) retriever
   memory/       bounded session store
   governance/   kill switch · quotas
+  events.py     normalized runtime event bus (agent map / execution timeline)
   mcp/          a real MCP tool server (JSON-RPC over stdio) + demo tools
   ui/           console.html — self-contained operator console (no build step)
   main.py       FastAPI: control plane + runtime plane + console
