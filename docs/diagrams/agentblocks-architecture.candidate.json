@@ -1,0 +1,494 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "agentblocks — Architecture",
+    "subtitle": "A config-driven multi-agent platform: one generic engine runs any agent from a JSON definition. New here? Read the cards.",
+    "output": "agentblocks-architecture.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Naveenkumaar/agentblocks.git",
+      "revision": "8c30c454bd4c68223e808c4fa9d7fc898b5e3d91",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "frontend": {
+          "label": "Frontend: a screen a person uses"
+        },
+        "backend": {
+          "label": "Backend: service code doing the work"
+        },
+        "database": {
+          "label": "Datastore: where information is saved"
+        },
+        "security": {
+          "label": "Gate/control: a check that protects or decides"
+        },
+        "external": {
+          "label": "External: a person or third-party system"
+        }
+      }
+    }
+  },
+  "layout": {
+    "mode": "grid",
+    "origin": [
+      40,
+      40
+    ],
+    "cols": 5,
+    "gapX": 76,
+    "gapY": 70,
+    "cellW": 140,
+    "cellH": 60
+  },
+  "components": [
+    {
+      "id": "user",
+      "type": "external",
+      "label": "User / caller",
+      "sublabel": "HTTP or console",
+      "row": 0,
+      "col": 0
+    },
+    {
+      "id": "console",
+      "type": "frontend",
+      "label": "Operator console",
+      "sublabel": "single-file HTML",
+      "row": 0,
+      "col": 1,
+      "sources": [
+        {
+          "path": "app/ui/console.html",
+          "line": 1,
+          "label": "console UI"
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "FastAPI app",
+      "sublabel": "control + runtime",
+      "row": 0,
+      "col": 2,
+      "sources": [
+        {
+          "path": "app/main.py",
+          "line": 28,
+          "label": "app = FastAPI"
+        }
+      ]
+    },
+    {
+      "id": "registry",
+      "type": "backend",
+      "label": "Registry",
+      "sublabel": "versions + activate",
+      "row": 0,
+      "col": 3,
+      "sources": [
+        {
+          "path": "app/engine/registry.py",
+          "line": 20,
+          "label": "Registry"
+        }
+      ]
+    },
+    {
+      "id": "runtime",
+      "type": "backend",
+      "label": "Engine (turn loop)",
+      "sublabel": "one generic pipeline",
+      "row": 2,
+      "col": 2,
+      "sources": [
+        {
+          "path": "app/engine/runtime.py",
+          "line": 39,
+          "label": "Engine.run_turn"
+        }
+      ]
+    },
+    {
+      "id": "router",
+      "type": "backend",
+      "label": "Router",
+      "sublabel": "pick a topic",
+      "row": 1,
+      "col": 2,
+      "sources": [
+        {
+          "path": "app/engine/routing.py",
+          "line": 30,
+          "label": "routing"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "Model gateway",
+      "sublabel": "pluggable backend",
+      "row": 1,
+      "col": 3,
+      "sources": [
+        {
+          "path": "app/engine/model_gateway.py",
+          "line": 14,
+          "label": "get_model"
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "type": "external",
+      "label": "LLM backend",
+      "sublabel": "stub or real",
+      "row": 1,
+      "col": 4
+    },
+    {
+      "id": "governance",
+      "type": "security",
+      "label": "Governance",
+      "sublabel": "kill switch + quotas",
+      "row": 1,
+      "col": 0,
+      "sources": [
+        {
+          "path": "app/governance/checks.py",
+          "line": 11,
+          "label": "enforce"
+        }
+      ]
+    },
+    {
+      "id": "guardrails",
+      "type": "security",
+      "label": "Guardrails",
+      "sublabel": "injection + PII",
+      "row": 1,
+      "col": 1,
+      "sources": [
+        {
+          "path": "app/guardrails/injection.py",
+          "line": 23,
+          "label": "detect_injection"
+        },
+        {
+          "path": "app/guardrails/redact.py",
+          "line": 19,
+          "label": "redact_pii"
+        }
+      ]
+    },
+    {
+      "id": "connectors",
+      "type": "security",
+      "label": "Connectors",
+      "sublabel": "the trust boundary",
+      "row": 3,
+      "col": 3,
+      "sources": [
+        {
+          "path": "app/connectors/base.py",
+          "line": 9,
+          "label": "Connector (scope)"
+        }
+      ]
+    },
+    {
+      "id": "knowledge",
+      "type": "backend",
+      "label": "Knowledge (RAG)",
+      "sublabel": "retriever + HyDE",
+      "row": 2,
+      "col": 3,
+      "sources": [
+        {
+          "path": "app/knowledge/retriever.py",
+          "line": 32,
+          "label": "Retriever"
+        },
+        {
+          "path": "app/knowledge/hyde.py",
+          "line": 1,
+          "label": "HyDE"
+        }
+      ]
+    },
+    {
+      "id": "memory",
+      "type": "database",
+      "label": "Memory",
+      "sublabel": "session history",
+      "row": 2,
+      "col": 4,
+      "sources": [
+        {
+          "path": "app/memory/store.py",
+          "line": 11,
+          "label": "MemoryStore"
+        }
+      ]
+    },
+    {
+      "id": "orchestrator",
+      "type": "backend",
+      "label": "Orchestrator",
+      "sublabel": "plan + delegate",
+      "row": 2,
+      "col": 0,
+      "sources": [
+        {
+          "path": "app/engine/orchestrator.py",
+          "line": 161,
+          "label": "Orchestrator"
+        }
+      ]
+    },
+    {
+      "id": "mission",
+      "type": "backend",
+      "label": "Mission runner",
+      "sublabel": "multi-step missions",
+      "row": 2,
+      "col": 1,
+      "sources": [
+        {
+          "path": "app/engine/mission.py",
+          "line": 57,
+          "label": "MissionRunner"
+        }
+      ]
+    },
+    {
+      "id": "events",
+      "type": "backend",
+      "label": "Event bus",
+      "sublabel": "agent map feed",
+      "row": 3,
+      "col": 0,
+      "sources": [
+        {
+          "path": "app/events.py",
+          "line": 60,
+          "label": "EventBus"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "backend",
+      "label": "MCP server",
+      "sublabel": "real JSON-RPC tools",
+      "row": 3,
+      "col": 4,
+      "sources": [
+        {
+          "path": "app/mcp/server.py",
+          "line": 19,
+          "label": "MCP server"
+        }
+      ]
+    },
+    {
+      "id": "approvals",
+      "type": "security",
+      "label": "Approvals",
+      "sublabel": "maker-checker",
+      "row": 3,
+      "col": 2,
+      "sources": [
+        {
+          "path": "app/governance/approvals.py",
+          "line": 33,
+          "label": "ApprovalStore"
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "e-user",
+      "from": "user",
+      "to": "api",
+      "label": "POST /turns",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-console",
+      "from": "console",
+      "to": "api",
+      "label": "HTTP"
+    },
+    {
+      "id": "e-turn",
+      "from": "api",
+      "to": "runtime",
+      "label": "run turn",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-plan",
+      "from": "api",
+      "to": "orchestrator",
+      "label": "plan"
+    },
+    {
+      "id": "e-mission",
+      "from": "api",
+      "to": "mission",
+      "label": "mission"
+    },
+    {
+      "id": "e-reg",
+      "from": "runtime",
+      "to": "registry",
+      "label": "def"
+    },
+    {
+      "id": "e-route",
+      "from": "runtime",
+      "to": "router",
+      "label": "route",
+      "labelDy": -10
+    },
+    {
+      "id": "e-model",
+      "from": "runtime",
+      "to": "gateway",
+      "label": "gen"
+    },
+    {
+      "id": "e-gw-model",
+      "from": "gateway",
+      "to": "model",
+      "label": "call",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-gov",
+      "from": "runtime",
+      "to": "governance",
+      "label": "govern",
+      "variant": "security"
+    },
+    {
+      "id": "e-guard",
+      "from": "runtime",
+      "to": "guardrails",
+      "label": "vet",
+      "variant": "security"
+    },
+    {
+      "id": "e-conn",
+      "from": "runtime",
+      "to": "connectors",
+      "label": "tools",
+      "variant": "security"
+    },
+    {
+      "id": "e-know",
+      "from": "runtime",
+      "to": "knowledge",
+      "label": "RAG"
+    },
+    {
+      "id": "e-mem",
+      "from": "runtime",
+      "to": "memory",
+      "label": "history",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-mcp",
+      "from": "connectors",
+      "to": "mcp",
+      "label": "mcp tools",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-appr",
+      "from": "runtime",
+      "to": "approvals",
+      "label": "approve",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "e-ev",
+      "from": "runtime",
+      "to": "events",
+      "label": "emit",
+      "variant": "dashed"
+    },
+    {
+      "id": "e-orch",
+      "from": "orchestrator",
+      "to": "runtime",
+      "label": "per step"
+    },
+    {
+      "id": "e-mis",
+      "from": "mission",
+      "to": "runtime",
+      "label": "per step"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "How to read this diagram",
+      "items": [
+        "Each box is a part of the system; colour = what kind (see the legend top-right).",
+        "An arrow means 'talks to'; the words on it say what is sent. Dashed = background/occasional.",
+        "Click a box's SRC badge to jump to the exact code file and lines behind it."
+      ]
+    },
+    {
+      "dot": "orange",
+      "title": "Complete code map (every module)",
+      "items": [
+        "app/engine/runtime.py - the one generic turn loop every agent runs through.",
+        "app/engine/registry.py - stores versioned agent definitions and the active pointer.",
+        "app/engine/routing.py - picks which topic handles a message (pluggable).",
+        "app/engine/orchestrator.py / mission.py - autonomous multi-agent planning and multi-step missions.",
+        "app/engine/model_gateway.py - the pluggable LLM backend (stub or real).",
+        "app/connectors/ - every way the engine reaches data/tools; THE security boundary (scope injected here).",
+        "app/guardrails/ - prompt-injection defence and PII tokenise/restore.",
+        "app/governance/ - kill switch, quotas (checks.py) and maker-checker approvals (approvals.py).",
+        "app/knowledge/ - a dependency-free TF-IDF retriever plus HyDE.",
+        "app/memory/ - a bounded per-session history store.",
+        "app/events.py - the normalized event bus that drives the live agent map.",
+        "app/mcp/ - a real MCP tool server (JSON-RPC)."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Guided tour - one turn",
+      "items": [
+        "1. A caller POSTs a turn to the FastAPI app (or uses the console).",
+        "2. The engine loads the agent definition, governs the turn, and runs guardrails on the input.",
+        "3. It routes to a topic, assembles context (memory + knowledge + tools), and calls the model via the gateway.",
+        "4. A high-risk effector suspends for maker-checker approval; otherwise tools run through the connectors.",
+        "5. Output guardrails re-mask per audience, the reply is returned, and events are emitted for the agent map."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Why the gates exist",
+      "items": [
+        "Connectors are the only path to data, so tenant scope is injected below the model - never from the prompt.",
+        "Guardrails wrap the model (code, not prompt text) so injection and PII are handled deterministically.",
+        "High-risk actions need a second approver (maker-checker); the model never self-approves.",
+        "Governance can kill-switch or quota a turn before any work is done."
+      ]
+    }
+  ]
+}

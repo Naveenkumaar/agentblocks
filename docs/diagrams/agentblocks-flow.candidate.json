@@ -1,0 +1,242 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "agentblocks — One turn (sequence)",
+    "subtitle": "A single turn as calls between the engine's parts, top to bottom. Click any box to see the code. New here? Read the cards.",
+    "output": "agentblocks-flow.html",
+    "quality_profile": "showcase",
+    "repository": {
+      "url": "https://github.com/Naveenkumaar/agentblocks.git",
+      "revision": "8c30c454bd4c68223e808c4fa9d7fc898b5e3d91",
+      "link_mode": "local-only"
+    },
+    "legend": {
+      "mode": "all",
+      "entries": {
+        "default": {
+          "label": "a normal call between two parts"
+        },
+        "emphasis": {
+          "label": "the main path"
+        },
+        "security": {
+          "label": "a safety check"
+        },
+        "dashed": {
+          "label": "background / occasional"
+        },
+        "return": {
+          "label": "a response coming back"
+        }
+      }
+    }
+  },
+  "participants": [
+    {
+      "id": "caller",
+      "type": "external",
+      "label": "Caller",
+      "sublabel": "POST /turns"
+    },
+    {
+      "id": "engine",
+      "type": "backend",
+      "label": "Engine",
+      "sublabel": "run_turn",
+      "sources": [
+        {
+          "path": "app/engine/runtime.py",
+          "line": 39,
+          "label": "Engine.run_turn"
+        }
+      ]
+    },
+    {
+      "id": "gov",
+      "type": "backend",
+      "label": "Governance",
+      "sublabel": "kill + quotas",
+      "sources": [
+        {
+          "path": "app/governance/checks.py",
+          "line": 11,
+          "label": "enforce"
+        }
+      ]
+    },
+    {
+      "id": "guard",
+      "type": "backend",
+      "label": "Guardrails",
+      "sublabel": "inject + PII",
+      "sources": [
+        {
+          "path": "app/guardrails/injection.py",
+          "line": 23,
+          "label": "detect_injection"
+        },
+        {
+          "path": "app/guardrails/redact.py",
+          "line": 19,
+          "label": "redact_pii"
+        }
+      ]
+    },
+    {
+      "id": "know",
+      "type": "backend",
+      "label": "Knowledge",
+      "sublabel": "RAG + memory",
+      "sources": [
+        {
+          "path": "app/knowledge/retriever.py",
+          "line": 32,
+          "label": "Retriever"
+        }
+      ]
+    },
+    {
+      "id": "model",
+      "type": "external",
+      "label": "Model",
+      "sublabel": "via gateway",
+      "sources": [
+        {
+          "path": "app/engine/model_gateway.py",
+          "line": 14,
+          "label": "get_model"
+        }
+      ]
+    },
+    {
+      "id": "appr",
+      "type": "backend",
+      "label": "Approvals",
+      "sublabel": "maker-checker",
+      "sources": [
+        {
+          "path": "app/governance/approvals.py",
+          "line": 33,
+          "label": "ApprovalStore"
+        }
+      ]
+    }
+  ],
+  "messages": [
+    {
+      "id": "m1",
+      "from": "caller",
+      "to": "engine",
+      "y": 160,
+      "label": "run turn",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m2",
+      "from": "engine",
+      "to": "gov",
+      "y": 212,
+      "label": "govern (kill switch + quotas)",
+      "variant": "security"
+    },
+    {
+      "id": "m3",
+      "from": "engine",
+      "to": "guard",
+      "y": 264,
+      "label": "guardrails-in: injection + PII",
+      "variant": "security"
+    },
+    {
+      "id": "m4",
+      "from": "engine",
+      "to": "know",
+      "y": 316,
+      "label": "route + assemble context"
+    },
+    {
+      "id": "m5",
+      "from": "engine",
+      "to": "model",
+      "y": 368,
+      "label": "reason-act: generate",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m6",
+      "from": "model",
+      "to": "engine",
+      "y": 420,
+      "label": "reply text",
+      "variant": "return"
+    },
+    {
+      "id": "m7",
+      "from": "engine",
+      "to": "appr",
+      "y": 472,
+      "label": "high-risk effector? maker-checker",
+      "variant": "security"
+    },
+    {
+      "id": "m8",
+      "from": "engine",
+      "to": "guard",
+      "y": 524,
+      "label": "guardrails-out: re-mask per audience",
+      "variant": "security"
+    },
+    {
+      "id": "m9",
+      "from": "engine",
+      "to": "caller",
+      "y": 576,
+      "label": "egress: reply + trace",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "How to read this diagram",
+      "items": [
+        "This is a sequence: time flows top to bottom. Each column is a part of the engine; each arrow is a call or a reply.",
+        "It follows ONE turn end to end. A returning arrow is a response coming back.",
+        "Click a column header's SRC badge to see the exact code behind that part."
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Glossary (plain words)",
+      "items": [
+        "Turn - one request handled end to end by app/engine/runtime.py.",
+        "Topic - the named behaviour a message routes to.",
+        "Hydrator / effector - a read-only tool vs. an action that changes something.",
+        "Maker-checker - a high-risk action waits for a second approver before it runs.",
+        "PII tokenise/restore - swap personal data for placeholders before the model, restore only for the allowed audience."
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Guided tour - one turn",
+      "items": [
+        "1. The caller asks the engine to run a turn.",
+        "2. The engine governs it (kill switch + quotas), then runs input guardrails.",
+        "3. It routes to a topic and assembles context (knowledge + memory).",
+        "4. It asks the model to reason-act; the reply comes back.",
+        "5. A high-risk effector suspends for approval; output guardrails re-mask; the reply is returned."
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Why the checks exist",
+      "items": [
+        "govern runs first so a killed or over-quota turn does no work.",
+        "guardrails wrap the model in code, not prompt text, so injection/PII are deterministic.",
+        "maker-checker: the model proposes a high-risk action, a human approves it - the model never self-approves.",
+        "guardrails-out re-masks so PII reaches only an allowed audience."
+      ]
+    }
+  ]
+}
