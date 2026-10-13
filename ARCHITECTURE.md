@@ -104,6 +104,23 @@ still return a coherent reply — a turn never crashes.
 
 ---
 
+## Observability — the normalized event stream
+
+Alongside the per-turn `trace`, every turn emits a **normalized event stream** to a
+process-wide bus ([`app/events.py`](app/events.py)):
+
+- `run.started` once, `run.stage` per pipeline stage, and exactly one terminal event
+  (`run.completed` / `run.blocked` / `run.approval_required` / `run.failed`).
+- `EventBus` is a bounded ring buffer (`maxlen`) plus best-effort subscriber fan-out — a
+  failing subscriber can never break a turn.
+- `Engine.run_turn` is a thin wrapper: it mints a `run_id`, emits `run.started`, delegates
+  to `_run_turn` (whose `step()` emits each `run.stage`), then emits the one terminal event
+  keyed off the `TurnResult`. Sub-agent delegations surface as their own runs.
+- Exposed as `GET /events?since_seq=<n>` (stream only what's new) and `GET /events/runs`
+  (grouped per run, newest first). The console polls `/events/runs` to draw the **live
+  agent map**. It carries only safe execution metadata (stage, agent, status) — never the
+  model's hidden reasoning.
+
 ## The connector is the trust boundary
 
 Enforcement lives **below the model, not in the prompt**. The base
